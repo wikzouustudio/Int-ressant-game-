@@ -419,3 +419,6 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
   .actions button em { display: none; }
   .ledgers, .kv.two { grid-template-columns: 1fr; }
 }
+.money-card { flex: none; }
+.cash { white-space: nowrap; }
+.brand-text small { white-space: nowrap; }
