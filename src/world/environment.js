@@ -496,58 +496,78 @@ function buildStreetscape() {
   const trees = [];
   const props = new MeshBuilder({ lod: 1 });
   const carColors = ['#e0573f', '#4b8fd8', '#f2c14e', '#f8f9fa', '#2e3440', '#3bb3a8', '#8b5cf6'];
-  for (const v of ROADS) {
+  // Tree-lined avenues: every third road line in each direction. Trees always stand in a
+  // continuous grass strip with curbs; ordinary streets only get street furniture.
+  const isAvenue = (idx, horizontal) => (horizontal ? idx % 3 === 1 : idx % 3 === 2);
+  ROADS.forEach((v, idx) => {
     for (let k = 0; k < ROADS.length - 1; k++) {
       const a = ROADS[k] + 3.2, b = ROADS[k + 1] - 3.2; // segment between two intersections
       for (const horizontal of [true, false]) {
+        const ry = horizontal ? 0 : Math.PI / 2;
+        if (isAvenue(idx, horizontal)) {
+          const len = b - a, mid = (a + b) / 2;
+          for (const side of [-1, 1]) {
+            const off = v + side * EDGE;
+            props.group({ x: horizontal ? mid : off, z: horizontal ? off : mid, ry }, () => {
+              props.box(len, 0.08, 0.8, '#6fae3d', { y: ROAD_Y - 0.02, sharp: true });
+              props.box(len, 0.12, 0.08, '#c9c3b8', { y: ROAD_Y - 0.02, z: 0.44, sharp: true });
+              props.box(len, 0.12, 0.08, '#c9c3b8', { y: ROAD_Y - 0.02, z: -0.44, sharp: true });
+              for (let q = 0; q < len / 2.2; q++) if (r() < 0.35) props.sphere(0.07, ['#ffffff', '#ffd43b', '#ff8fab'][q % 3], { x: -len / 2 + q * 2.2 + r(), y: ROAD_Y + 0.08, z: (r() - 0.5) * 0.5 }, 5, 3);
+            });
+            const n = Math.max(1, Math.round(len / 6));
+            for (let q = 0; q < n; q++) {
+              const t = a + (q + 0.5) * (len / n) + (r() - 0.5) * 0.6;
+              trees.push([horizontal ? t : off, horizontal ? off : t, 0.75 + r() * 0.3, r()]);
+            }
+          }
+          continue;
+        }
         const side = r() < 0.5 ? 1 : -1;
         let t = a + r() * 3;
         while (t < b) {
           const roll = r();
           const x = horizontal ? t : v + side * EDGE;
           const z = horizontal ? v + side * EDGE : t;
-          const ry = horizontal ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);
-          if (roll < 0.42) trees.push([x, z, 0.7 + r() * 0.45, r()]);
-          else if (roll < 0.52) props.group({ x, z, ry }, () => {
+          const fy = horizontal ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);
+          if (roll < 0.22) props.group({ x, z, ry: fy }, () => {
             for (const bx of [-0.7, 0.7]) props.box(0.1, 0.45, 0.4, '#2e3440', { x: bx, y: ROAD_Y, sharp: true });
-            for (let q = 0; q < 3; q++) props.box(1.8, 0.07, 0.14, '#c98a4b', { y: ROAD_Y + 0.45, z: -0.14 + q * 0.14, sharp: true });
-            props.box(1.8, 0.35, 0.06, '#c98a4b', { y: ROAD_Y + 0.6, z: 0.2, sharp: true });
+            for (let q = 0; q < 3; q++) props.box(1.8, 0.07, 0.14, '#c98a4b', { y: ROAD_Y + 0.45, z: -0.14 + q * 0.14, r: 0.03 });
+            props.box(1.8, 0.35, 0.06, '#c98a4b', { y: ROAD_Y + 0.6, z: 0.2, r: 0.03 });
           });
-          else if (roll < 0.58) props.group({ x, z, ry }, () => {
+          else if (roll < 0.36) props.group({ x, z, ry: fy }, () => {
             props.cyl(0.22, 0.2, 0.75, '#3f8f45', { y: ROAD_Y }, 10);
             props.cyl(0.24, 0.24, 0.08, '#2e3440', { y: ROAD_Y + 0.75 }, 10);
           });
-          else if (roll < 0.66) props.group({ x, z, ry }, () => {
+          else if (roll < 0.48) props.group({ x, z, ry: fy }, () => {
             props.box(2.2, 0.4, 0.7, '#b9ad98', { y: ROAD_Y, r: 0.12 });
+            props.box(2.0, 0.06, 0.55, '#5b3a1e', { y: ROAD_Y + 0.36, sharp: true });
             for (let q = 0; q < 5; q++) props.blob(0.24, ['#ff6b9a', '#ffd43b', '#ffffff', '#b197fc', '#ff922b'][q], { x: -0.8 + q * 0.4, y: ROAD_Y + 0.5, z: (q % 2) * 0.15 - 0.07 }, 1);
           });
-          else if (roll < 0.7) props.group({ x, z, ry }, () => {
-            props.box(2.6, 0.08, 0.9, '#5f6875', { y: ROAD_Y + 2.3, sharp: true });
+          else if (roll < 0.54) props.group({ x, z, ry: fy }, () => {
+            props.box(2.6, 0.1, 0.9, '#5f6875', { y: ROAD_Y + 2.3, r: 0.04 });
             props.box(0.08, 2.3, 0.08, '#5f6875', { x: -1.2, y: ROAD_Y, z: 0.35, sharp: true });
             props.box(0.08, 2.3, 0.08, '#5f6875', { x: 1.2, y: ROAD_Y, z: 0.35, sharp: true });
             props.box(2.4, 1.6, 0.04, '#cfe6ef', { y: ROAD_Y + 0.5, z: 0.4, mat: 'glass', sharp: true });
-            props.box(1.6, 0.1, 0.3, '#c98a4b', { y: ROAD_Y + 0.45, z: 0.15, sharp: true });
+            props.box(1.6, 0.1, 0.3, '#c98a4b', { y: ROAD_Y + 0.45, z: 0.15, r: 0.03 });
             props.box(0.6, 0.6, 0.06, '#f2c14e', { x: 1.0, y: ROAD_Y + 2.45, z: 0.4, mat: 'lit', sharp: true });
           });
-          else if (roll < 0.8 && Math.abs(v) > PLAY_HALF) props.group({ x: horizontal ? t : v + side * 1.65, z: horizontal ? v + side * 1.65 : t, ry: horizontal ? 0 : Math.PI / 2 }, () => {
+          else if (roll < 0.7 && Math.abs(v) > PLAY_HALF) props.group({ x: horizontal ? t : v + side * 1.65, z: horizontal ? v + side * 1.65 : t, ry }, () => {
             const col = carColors[(r() * carColors.length) | 0];
             props.rbox(3.4, 0.8, 1.6, 0.35, col, { y: ROAD_Y + 0.3, mat: 'soft' });
             props.rbox(1.9, 0.72, 1.45, 0.32, '#bfe3ff', { x: -0.2, y: ROAD_Y + 0.95, mat: 'glass' });
             for (const [cx, cz] of [[1.1, 0.75], [-1.1, 0.75], [1.1, -0.75], [-1.1, -0.75]]) props.cyl(0.36, 0.36, 0.26, '#22262d', { x: cx, y: ROAD_Y + 0.36, z: cz - Math.sign(cz) * 0.13, rx: Math.PI / 2 }, 10);
           });
-          t += 2.5 + r() * 5.5;
+          t += 4 + r() * 7;
         }
       }
     }
-  }
+  });
   group.add(props.build());
   // street trees (instanced), each slightly different
   const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 2.2, 7).translate(0, 1.1, 0);
   const crownGeo = mergeBlobs([[0, 3.0, 0, 1.25], [0.5, 2.6, 0.3, 0.8], [-0.45, 2.7, -0.3, 0.75]], 1);
-  const planterGeo = new THREE.BoxGeometry(1.0, 0.25, 1.0).translate(0, 0.12, 0);
   const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ color: '#7a5233', roughness: 1 }), trees.length);
   const crowns = new THREE.InstancedMesh(crownGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 }), trees.length);
-  const planters = new THREE.InstancedMesh(planterGeo, new THREE.MeshStandardMaterial({ color: '#8d7b62', roughness: 1 }), trees.length);
   const d = new THREE.Object3D();
   const greens = ['#4ca346', '#5cb84a', '#3f8f3a', '#7cbf3f', '#6aa84f'];
   trees.forEach(([x, z, s, q], i) => {
@@ -558,11 +578,8 @@ function buildStreetscape() {
     trunks.setMatrixAt(i, d.matrix);
     crowns.setMatrixAt(i, d.matrix);
     crowns.setColorAt(i, new THREE.Color(greens[Math.floor(q * greens.length)]));
-    d.scale.set(1, 1, 1);
-    d.updateMatrix();
-    planters.setMatrixAt(i, d.matrix);
   });
-  for (const m of [trunks, crowns, planters]) { m.castShadow = m !== planters; m.receiveShadow = true; m.computeBoundingSphere(); group.add(m); }
+  for (const m of [trunks, crowns]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); group.add(m); }
   return group;
 }
 

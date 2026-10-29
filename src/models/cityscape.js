@@ -39,7 +39,7 @@ const BLOCKS = {
       windowRow(b, W - 1.5, y, -1 + D / 2 + 0.02, 4, lit, PAL.white);
       b.group({ x: W / 2 + 0.02 }, () => windowRow(b, D - 1.5, y, -1, 3, lit, PAL.white, Math.PI / 2));
       b.group({ x: -W / 2 - 0.02 }, () => windowRow(b, D - 1.5, y, -1, 3, lit, PAL.white, -Math.PI / 2));
-      b.box(W + 0.1, 0.12, D + 0.1, shade(wall, 0.85), { y: 3.1 + f * fh, z: -1, sharp: true });
+      b.box(W + 0.1, 0.14, D + 0.1, shade(wall, 0.85), { y: 3.1 + f * fh, z: -1, r: 0.06 });
       if (f % 2 === 1) b.box(3, 0.16, 1.0, PAL.white, { x: -2.2, y: y - 0.35, z: -1 + D / 2 + 0.5, r: 0.05 });
     }
     // ground floor shop
@@ -90,8 +90,8 @@ const BLOCKS = {
     b.box(8.4, 2.6, 8.4, '#9cc9f0', { y: 0.4, z: -1, mat: 'glass', r: 0.2 });
     let y = 3;
     for (let f = 0; f < floors; f++) {
-      b.box(8.6, 0.25, 8.6, PAL.white, { y, z: -1, sharp: true });
-      b.box(8.2, fh - 0.25, 8.2, '#6fa3d8', { y: y + 0.25, z: -1, mat: 'glass', sharp: true });
+      b.box(8.6, 0.28, 8.6, PAL.white, { y, z: -1, r: 0.1 });
+      b.box(8.2, fh - 0.25, 8.2, '#6fa3d8', { y: y + 0.25, z: -1, mat: 'glass', r: 0.18 });
       for (const [ry, ox, oz] of [[0, 0, 4.12], [Math.PI / 2, 4.12, 0], [-Math.PI / 2, -4.12, 0]]) {
         b.group({ x: ox, y: y + 0.55, z: -1 + oz, ry }, () => {
           for (let k = 0; k < 4; k++) if (r() > 0.4) b.box(1.5, fh - 0.75, 0.05, lit(k), { x: -2.9 + k * 1.95, mat: 'lit', sharp: true });
@@ -192,8 +192,11 @@ const OPEN = ['park', 'market', 'parking', 'sports'];
 
 function corners(b, r) {
   // a few bushes / small trees in random pad corners: breaks the strict grid
-  for (const [cx, cz] of [[-5.6, -5.6], [5.6, -5.6], [-5.6, 5.6], [5.6, 5.6]]) {
+  for (const [cx, cz] of [[-5.3, -5.3], [5.3, -5.3], [-5.3, 5.3], [5.3, 5.3]]) {
     if (r() < 0.45) continue;
+    // every tree or bush gets its own little lawn with a curb
+    b.box(2.2, 0.08, 2.2, '#c9c3b8', { x: cx, y: PAD_Y - 0.02, z: cz, sharp: true });
+    b.box(1.9, 0.1, 1.9, '#7cbc4f', { x: cx, y: PAD_Y - 0.02, z: cz, sharp: true });
     if (r() < 0.5) b.blob(0.5 + r() * 0.5, ['#4ca346', '#3f8f3a', '#6aa84f'][(r() * 3) | 0], { x: cx + (r() - 0.5), y: PAD_Y + 0.35, z: cz + (r() - 0.5), sy: 0.8 }, 1);
     else {
       b.cyl(0.14, 0.2, 1.6, '#7a5233', { x: cx, y: PAD_Y, z: cz }, 6);

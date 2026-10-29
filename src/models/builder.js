@@ -22,7 +22,7 @@ export const MAT_CODE = { std: 0, soft: 1, metal: 2, gold: 3, glass: 4, lit: 5, 
 export const LOD_SETTINGS = [
   { skip: 0, seg: 1, round: true },
   { skip: 0.12, seg: 0.6, round: true },
-  { skip: 0.32, seg: 0.4, round: false },
+  { skip: 0.32, seg: 0.4, round: true },
 ];
 
 /**
@@ -176,6 +176,22 @@ export class MeshBuilder {
   /** Triangular prism: length along X, triangle in the YZ plane. */
   prism(w, h, d, color, o = {}) {
     if (this.skip(Math.max(w, h, d))) return this;
+    if (!o.sharp) {
+      // rounded gable: triangle extruded with a soft bevel
+      const bv = Math.min(0.14, h * 0.12, d * 0.08);
+      const shape = new THREE.Shape();
+      shape.moveTo(-d / 2 + bv, bv * 0.6);
+      shape.lineTo(d / 2 - bv, bv * 0.6);
+      shape.lineTo(0, h - bv * 1.6);
+      shape.closePath();
+      const g = new THREE.ExtrudeGeometry(shape, {
+        depth: w - bv * 2, bevelEnabled: true, bevelThickness: bv, bevelSize: bv, bevelSegments: this.lod.seg === 1 ? 3 : this.lod.seg >= 0.6 ? 2 : 1, curveSegments: 1,
+      });
+      g.translate(0, 0, -(w - bv * 2) / 2);
+      g.rotateY(Math.PI / 2);
+      g.deleteAttribute('uv');
+      return this.geo(g, color, o);
+    }
     const g = new THREE.CylinderGeometry(1, 1, 1, 3, 1);
     g.rotateZ(Math.PI / 2);
     g.rotateX(-Math.PI / 2);
