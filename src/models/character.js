@@ -44,95 +44,103 @@ const o = (base, extra) => ({ ...extra, ...base });
 // ---------------------------------------------------------------------------
 // Geometry templates (shared by every NPC of the same kind)
 // ---------------------------------------------------------------------------
+// Blocky "voxel" characters (Minecraft-like proportions, 1 px ≈ 0.085 u) with softly
+// rounded edges: 8×8 head, 8×12×4 torso, 4×12×4 arms and legs.
+const DARK = '#1b1d24';
+
+function hair(b, hs) {
+  if (hs === 'bald') return;
+  b.rbox(0.78, 0.17, 0.78, 0.06, '#000', o({ y: 2.62 }, HAIR_S));
+  b.rbox(0.78, hs === 'long' ? 1.0 : 0.56, 0.15, 0.05, '#000', o({ y: hs === 'long' ? 1.68 : 2.14, z: -0.33 }, HAIR_S));
+  for (const x of [-0.355, 0.355]) b.rbox(0.09, 0.34, 0.66, 0.04, '#000', o({ x, y: 2.36, z: -0.05 }, HAIR_S));
+  b.rbox(0.78, 0.12, 0.1, 0.04, '#000', o({ y: 2.56, z: 0.34 }, HAIR_S));
+  if (hs === 'bun') b.rbox(0.32, 0.3, 0.3, 0.1, '#000', o({ y: 2.76, z: -0.2 }, HAIR_S));
+  if (hs === 'spiky') {
+    for (let i = 0; i < 4; i++) b.rbox(0.18, 0.2, 0.18, 0.05, '#000', o({ x: -0.27 + i * 0.18, y: 2.74, z: -0.05 + (i % 2) * 0.12, rz: (i - 1.5) * 0.15 }, HAIR_S));
+  }
+}
+
+function face(b, tier) {
+  for (const s of [-1, 1]) {
+    b.box(0.17, 0.11, 0.03, '#ffffff', { x: s * 0.17, y: 2.3, z: 0.36, sharp: true });
+    b.box(0.08, 0.11, 0.04, DARK, { x: s * 0.13, y: 2.3, z: 0.365, sharp: true });
+    b.box(0.17, 0.04, 0.03, '#3a2a22', { x: s * 0.17, y: 2.46, z: 0.36, sharp: true });
+  }
+  b.box(0.12, 0.1, 0.05, '#000', o({ y: 2.18, z: 0.36, k: 0.86, sharp: true }, SKIN_S));
+  b.box(0.24, 0.05, 0.03, '#8a3b3b', { y: 2.08, z: 0.36, sharp: true });
+  if (tier === 'expert') {
+    for (const s of [-1, 1]) {
+      b.box(0.24, 0.035, 0.03, '#111827', { x: s * 0.17, y: 2.41, z: 0.385, sharp: true });
+      b.box(0.24, 0.035, 0.03, '#111827', { x: s * 0.17, y: 2.27, z: 0.385, sharp: true });
+      b.box(0.035, 0.17, 0.03, '#111827', { x: s * 0.29, y: 2.27, z: 0.385, sharp: true });
+    }
+    b.box(0.1, 0.03, 0.03, '#111827', { y: 2.37, z: 0.385, sharp: true });
+  }
+}
+
 function bodyGeo(b, tier, hs) {
   if (tier === 'robot') {
-    b.rbox(0.9, 0.86, 0.6, 0.18, '#000', o({ y: 0.95, mat: 'metal' }, SHIRT_S));
-    b.cyl(0.32, 0.32, 0.05, '#1f2937', { y: 1.4, z: 0.29, rx: Math.PI / 2 });
-    b.sphere(0.16, '#000', o({ y: 1.42, z: 0.31, sz: 0.4, mat: 'neon' }, ACCENT_S));
-    b.cyl(0.14, 0.14, 0.2, '#6b7280', { y: 1.78, mat: 'metal' });
-    b.rbox(0.84, 0.72, 0.74, 0.2, '#000', o({ y: 1.92, mat: 'metal' }, SHIRT_S));
-    b.rbox(0.7, 0.24, 0.1, 0.05, '#0b1220', { y: 2.2, z: 0.35 });
-    b.box(0.5, 0.08, 0.05, '#000', o({ y: 2.28, z: 0.41, mat: 'neon' }, ACCENT_S));
-    b.cyl(0.03, 0.03, 0.45, '#9ca3af', { y: 2.62, mat: 'metal' });
-    b.sphere(0.09, '#ff3b3b', { y: 3.1, mat: 'neon' });
-    b.cyl(0.12, 0.12, 0.12, '#6b7280', { x: 0.46, y: 2.2, rz: Math.PI / 2, mat: 'metal' });
-    b.cyl(0.12, 0.12, 0.12, '#6b7280', { x: -0.34, y: 2.2, rz: Math.PI / 2, mat: 'metal' });
+    b.rbox(0.72, 1.0, 0.4, 0.08, '#000', o({ y: 1.02, mat: 'metal' }, SHIRT_S));
+    b.rbox(0.46, 0.4, 0.06, 0.04, '#1f2937', { y: 1.42, z: 0.19 });
+    b.box(0.3, 0.1, 0.04, '#000', o({ y: 1.58, z: 0.22, mat: 'neon', sharp: true }, ACCENT_S));
+    b.box(0.08, 0.08, 0.04, '#ff3b3b', { x: -0.12, y: 1.46, z: 0.22, mat: 'neon', sharp: true });
+    b.box(0.08, 0.08, 0.04, '#3bff7a', { x: 0.04, y: 1.46, z: 0.22, mat: 'neon', sharp: true });
+    b.rbox(0.76, 0.72, 0.72, 0.1, '#000', o({ y: 2.04, mat: 'metal' }, SHIRT_S));
+    b.rbox(0.62, 0.24, 0.06, 0.05, '#0b1220', { y: 2.26, z: 0.35 });
+    b.box(0.46, 0.08, 0.04, '#000', o({ y: 2.34, z: 0.385, mat: 'neon', sharp: true }, ACCENT_S));
+    b.box(0.05, 0.36, 0.05, '#9ca3af', { y: 2.76, mat: 'metal', sharp: true });
+    b.rbox(0.14, 0.14, 0.14, 0.05, '#ff3b3b', { y: 3.1, mat: 'neon' });
+    for (const s of [-1, 1]) b.rbox(0.08, 0.2, 0.2, 0.03, '#6b7280', { x: s * 0.41, y: 2.3, mat: 'metal' });
     return;
   }
   const torso = tier === 'expert' ? { c: '#1f2937', s: {} } : { c: '#000', s: SHIRT_S };
-  b.rbox(0.86, 0.84, 0.54, 0.16, torso.c, o({ y: 0.95 }, torso.s));
-  b.box(0.88, 0.1, 0.56, '#2a2a2a', { y: 0.95 });
-  b.box(0.14, 0.08, 0.04, '#d4af37', { y: 0.96, z: 0.28, mat: 'gold' });
-  b.cyl(0.15, 0.17, 0.2, '#000', o({ y: 1.74 }, SKIN_S));
-  // head
-  b.sphere(0.46, '#000', o({ y: 2.22 }, SKIN_S), 20, 16);
-  b.sphere(0.09, '#000', o({ x: -0.45, y: 2.2, sx: 0.5 }, SKIN_S));
-  b.sphere(0.09, '#000', o({ x: 0.45, y: 2.2, sx: 0.5 }, SKIN_S));
-  // face
-  b.sphere(0.065, '#1b1b1b', { x: -0.16, y: 2.27, z: 0.41, sz: 0.5 }, 10, 8);
-  b.sphere(0.065, '#1b1b1b', { x: 0.16, y: 2.27, z: 0.41, sz: 0.5 }, 10, 8);
-  b.sphere(0.022, '#ffffff', { x: -0.14, y: 2.3, z: 0.445 }, 6, 4);
-  b.sphere(0.022, '#ffffff', { x: 0.18, y: 2.3, z: 0.445 }, 6, 4);
-  b.box(0.1, 0.035, 0.03, '#1b1b1b', { x: -0.16, y: 2.4, z: 0.42 });
-  b.box(0.1, 0.035, 0.03, '#1b1b1b', { x: 0.16, y: 2.4, z: 0.42 });
-  b.sphere(0.07, '#000', o({ y: 2.16, z: 0.45, sz: 0.7, k: 0.88 }, SKIN_S), 8, 6);
-  b.box(0.16, 0.035, 0.03, '#8a3b3b', { y: 2.03, z: 0.43 });
-  b.sphere(0.075, '#ff9b9b', { x: -0.27, y: 2.12, z: 0.36, sz: 0.35 }, 8, 6);
-  b.sphere(0.075, '#ff9b9b', { x: 0.27, y: 2.12, z: 0.36, sz: 0.35 }, 8, 6);
-  // hair
-  if (hs !== 'bald' && tier !== 'apprentice') {
-    b.sphere(0.49, '#000', o({ y: 2.24, z: -0.03, rx: -0.45 }, HAIR_S), 20, 12, Math.PI * 0.52);
-    if (hs === 'long') b.rbox(0.86, 0.75, 0.3, 0.12, '#000', o({ y: 1.72, z: -0.26 }, HAIR_S));
-    if (hs === 'bun') b.sphere(0.2, '#000', o({ y: 2.74, z: -0.22 }, HAIR_S));
-    if (hs === 'spiky') {
-      for (let i = 0; i < 5; i++) b.cone(0.12, 0.3, '#000', o({ x: -0.28 + i * 0.14, y: 2.58, z: -0.05, rx: -0.4 }, HAIR_S), 5);
-    }
-  } else if (hs === 'long' && tier === 'apprentice') {
-    b.rbox(0.82, 0.6, 0.28, 0.12, '#000', o({ y: 1.8, z: -0.27 }, HAIR_S));
-  }
+  b.rbox(0.7, 1.0, 0.38, 0.07, torso.c, o({ y: 1.02 }, torso.s));
+  b.rbox(0.72, 0.09, 0.4, 0.03, '#2a2a2a', { y: 1.04 });
+  b.box(0.12, 0.07, 0.03, '#d4af37', { y: 1.05, z: 0.2, mat: 'gold', sharp: true });
+  b.rbox(0.74, 0.72, 0.72, 0.1, '#000', o({ y: 2.04 }, SKIN_S));
+  face(b, tier);
   if (tier === 'apprentice') {
-    b.sphere(0.5, '#000', o({ y: 2.26, rx: -0.25, k: 0.8 }, SHIRT_S), 20, 10, Math.PI * 0.48);
-    b.box(0.62, 0.05, 0.42, '#000', o({ y: 2.42, z: 0.42, rx: -0.12, k: 0.7 }, SHIRT_S));
-    b.sphere(0.06, '#ffffff', { y: 2.75, z: -0.04 }, 8, 6);
+    if (hs === 'long') b.rbox(0.78, 0.9, 0.15, 0.05, '#000', o({ y: 1.78, z: -0.33 }, HAIR_S));
+    b.rbox(0.8, 0.22, 0.8, 0.07, '#000', o({ y: 2.62, k: 0.8 }, SHIRT_S));
+    b.rbox(0.62, 0.07, 0.32, 0.03, '#000', o({ y: 2.62, z: 0.5, k: 0.65 }, SHIRT_S));
+    b.rbox(0.2, 0.12, 0.04, 0.02, '#ffffff', { y: 2.68, z: 0.405 });
+  } else {
+    hair(b, hs);
   }
   if (tier === 'employee') {
-    b.box(0.44, 0.12, 0.06, '#ffffff', { y: 1.66, z: 0.25 });
-    b.box(0.12, 0.5, 0.05, '#000', o({ y: 1.16, z: 0.28 }, ACCENT_S));
-    b.box(0.18, 0.12, 0.05, '#000', o({ y: 1.62, z: 0.28 }, ACCENT_S));
-    b.box(0.18, 0.06, 0.03, '#ffffff', { x: 0.24, y: 1.5, z: 0.27 });
+    b.box(0.36, 0.1, 0.05, '#ffffff', { y: 1.92, z: 0.19, sharp: true });
+    b.box(0.12, 0.56, 0.04, '#000', o({ y: 1.34, z: 0.205, sharp: true }, ACCENT_S));
+    b.box(0.17, 0.1, 0.05, '#000', o({ y: 1.86, z: 0.205, sharp: true }, ACCENT_S));
+    b.box(0.14, 0.05, 0.03, '#ffffff', { x: 0.2, y: 1.7, z: 0.2, sharp: true });
   }
   if (tier === 'expert') {
-    b.box(0.3, 0.62, 0.04, '#f8fafc', { y: 1.15, z: 0.26 });
-    b.box(0.1, 0.48, 0.05, '#000', o({ y: 1.2, z: 0.285 }, ACCENT_S));
-    b.torus(0.11, 0.02, '#111827', { x: -0.16, y: 2.27, z: 0.44 }, Math.PI * 2, 6, 16);
-    b.torus(0.11, 0.02, '#111827', { x: 0.16, y: 2.27, z: 0.44 }, Math.PI * 2, 6, 16);
-    b.box(0.1, 0.02, 0.02, '#111827', { y: 2.29, z: 0.45 });
-    b.box(0.12, 0.08, 0.02, '#d4af37', { x: -0.26, y: 1.55, z: 0.275, mat: 'gold' });
+    b.box(0.26, 0.9, 0.04, '#f8fafc', { y: 1.12, z: 0.19, sharp: true });
+    b.box(0.1, 0.6, 0.05, '#000', o({ y: 1.3, z: 0.205, sharp: true }, ACCENT_S));
+    b.box(0.12, 0.08, 0.03, '#d4af37', { x: -0.22, y: 1.78, z: 0.2, mat: 'gold', sharp: true });
   }
 }
 
 function armGeo(b, tier) {
   if (tier === 'robot') {
-    b.sphere(0.16, '#6b7280', { y: -0.02, mat: 'metal' }, 10, 8);
-    b.cyl(0.1, 0.1, 0.62, '#000', o({ y: -0.68, mat: 'metal' }, SHIRT_S), 10);
-    b.sphere(0.15, '#374151', { y: -0.72, mat: 'metal' }, 10, 8);
+    b.rbox(0.3, 1.0, 0.3, 0.06, '#000', o({ y: -1.0, mat: 'metal' }, SHIRT_S));
+    b.box(0.32, 0.08, 0.32, '#374151', { y: -0.55, mat: 'metal', sharp: true });
     return;
   }
-  if (tier === 'expert') b.rbox(0.26, 0.6, 0.28, 0.1, '#1f2937', { y: -0.6 });
-  else b.rbox(0.26, 0.6, 0.28, 0.1, '#000', o({ y: -0.6 }, SHIRT_S));
-  if (tier === 'expert') b.box(0.24, 0.06, 0.26, '#f8fafc', { y: -0.62 });
-  b.sphere(0.14, '#000', o({ y: -0.72 }, SKIN_S), 12, 10);
+  if (tier === 'expert') b.rbox(0.34, 0.62, 0.34, 0.06, '#1f2937', { y: -0.62 });
+  else b.rbox(0.34, 0.44, 0.34, 0.06, '#000', o({ y: -0.44 }, SHIRT_S));
+  if (tier === 'expert') b.box(0.33, 0.08, 0.33, '#f8fafc', { y: -0.66, sharp: true });
+  b.rbox(0.32, tier === 'expert' ? 0.4 : 0.58, 0.32, 0.06, '#000', o({ y: -1.0 }, SKIN_S));
 }
 
 function legGeo(b, tier) {
   if (tier === 'robot') {
-    b.cyl(0.13, 0.13, 0.72, '#6b7280', { y: -0.8, mat: 'metal' }, 10);
-    b.rbox(0.36, 0.22, 0.5, 0.08, '#000', o({ y: -1.0, z: 0.06, mat: 'metal' }, SHIRT_S));
+    b.rbox(0.32, 0.8, 0.32, 0.06, '#6b7280', { y: -0.82, mat: 'metal' });
+    b.rbox(0.36, 0.22, 0.44, 0.06, '#000', o({ y: -1.02, z: 0.04, mat: 'metal' }, SHIRT_S));
     return;
   }
-  b.rbox(0.33, 0.8, 0.35, 0.1, '#000', o({ y: -0.82 }, PANTS_S));
-  b.rbox(0.36, 0.2, 0.52, 0.08, tier === 'expert' ? '#111111' : '#f5f5f5', { y: -1.0, z: 0.07 });
-  b.box(0.37, 0.05, 0.53, '#3a3a3a', { y: -1.0, z: 0.07 });
+  b.rbox(0.34, 0.84, 0.36, 0.06, '#000', o({ y: -0.84 }, PANTS_S));
+  b.rbox(0.36, 0.2, 0.42, 0.06, tier === 'expert' ? '#111111' : '#f5f5f5', { y: -1.02, z: 0.03 });
+  b.box(0.37, 0.05, 0.43, '#3a3a3a', { y: -1.02, z: 0.03, sharp: true });
 }
 
 const PROPS = {
@@ -190,10 +198,10 @@ export function createCharacter(look) {
     parent.add(g);
     return g;
   };
-  const armL = node(-0.55, 1.7);
-  const armR = node(0.55, 1.7);
-  const legL = node(-0.21, 1.0);
-  const legR = node(0.21, 1.0);
+  const armL = node(-0.53, 2.0);
+  const armR = node(0.53, 2.0);
+  const legL = node(-0.175, 1.02);
+  const legR = node(0.175, 1.02);
   const bag = node(0, 0, armR);
   const cup = node(0, 0, armL);
   const phone = node(0, 0, armR);
