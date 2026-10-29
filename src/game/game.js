@@ -144,7 +144,7 @@ Plot.prototype.startDemolition = function startDemolition() {
 Plot.prototype.smash = function smash() {
   if (!this.demolish) return;
   this.demolish.t += 0.6;
-  this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 8, 1.5 + Math.random() * 3, this.center.z + (Math.random() - 0.5) * 6), { color: '#bfb3a0', size: 1.2, life: 1.2, up: 1.5, spread: 2, radial: 4, count: 6 });
+  this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 8, 1.5 + Math.random() * 3, this.center.z + (Math.random() - 0.5) * 6), { color: '#bfb3a0', size: 0.8, life: 0.9, up: 1.8, spread: 2, radial: 4, count: 5, grow: 0.6 });
   this.game.sound.whoosh();
 };
 
@@ -162,8 +162,8 @@ Plot.prototype.updateDemolition = function updateDemolition(t, dt) {
   d.exc.arm.rotation.y = Math.sin(t * 0.9) * 0.4;
   d.puff -= dt;
   if (d.puff <= 0) {
-    d.puff = 0.15;
-    this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 9, 0.6 + Math.random() * 2, this.center.z + (Math.random() - 0.5) * 7), { color: '#cbbfa9', size: 1.4, life: 1.6, up: 1.2, spread: 2, radial: 2.5 });
+    d.puff = 0.28;
+    this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 9, 0.6 + Math.random() * 2, this.center.z + (Math.random() - 0.5) * 7), { color: '#cbbfa9', size: 0.8, life: 1.1, up: 1.6, spread: 2, radial: 2.5, grow: 0.8 });
   }
   if (k >= 1) this.game.finishDemolition(this);
 };
