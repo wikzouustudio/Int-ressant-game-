@@ -102,7 +102,7 @@ export class Effects {
     }
     const el = document.createElement('div');
     el.className = 'float-text ' + cls;
-    el.textContent = text;
+    el.innerHTML = text;
     this.layer.appendChild(el);
     this.floats.push({ el, p: pos.clone(), life: 0, max: 1.6 });
   }

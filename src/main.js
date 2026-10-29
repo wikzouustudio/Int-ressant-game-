@@ -4,6 +4,9 @@ import { createEngine } from './engine/engine.js';
 import { createEnvironment } from './world/environment.js';
 import { Game } from './game/game.js';
 import { UI } from './ui/ui.js';
+import { icon } from './ui/icons.js';
+
+document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
 
 const bar = document.getElementById('loader-bar');
 const step = (p) => { bar.style.width = p + '%'; return new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0))); };
@@ -23,7 +26,8 @@ async function boot() {
   await step(85);
   const result = game.load();
   ui.refresh();
-  ui.showTutorial(game.tutorial);
+  if (!game.canton) ui.openCanton();
+  else ui.showTutorial(game.tutorial);
   if (result && result.offline > 0) ui.showOffline(result.offline, result.elapsed);
   await step(100);
 

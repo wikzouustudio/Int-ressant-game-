@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MeshBuilder, rng } from './builder.js';
+import { drawIcon } from '../ui/icons.js';
 
 const WOOD = '#9c6b3f';
 const WOOD_D = '#6f4627';
@@ -123,7 +124,8 @@ const MODELS = {
       for (let i = 0; i < 5; i++) b.sphere(0.16, '#ffe135', { x: 3.9 + Math.cos(i) * 0.9, y: 2.3 + Math.sin(i * 3) * 0.4, z: -3 + Math.sin(i) * 0.9 }, 6, 4);
     }
     if (level >= 7) b.torus(1.6, 0.08, '#fff176', { y: 5.4, z: -1.6, mat: 'neon' }, Math.PI * 2, 6, 32);
-    ctx.workStyle = 1;
+    ctx.door = null;
+    ctx.spots = { press: [3.9, 2.6, Math.PI], counter: [0, 2.3, Math.PI], tables: [-3.8, 2.9, Math.PI] };
   },
 
   bakery(b, level, ctx) {
@@ -172,7 +174,8 @@ const MODELS = {
         b.box(0.45, 0.6, 0.45, '#2f7d5b', { x: x - 0.8, y: 0, z: 3.4 });
       }
     }
-    ctx.workStyle = 0;
+    ctx.door = { out: [0, 2.5], in: [0, 0.2] };
+    ctx.spots = { shop: [-2.6, 2.6, Math.PI], terrace: [4.4, 4.4, Math.PI] };
   },
 
   garage(b, level, ctx) {
@@ -206,7 +209,8 @@ const MODELS = {
       b.cyl(0.1, 0.1, 2.2, '#adb5bd', { x: 4, y: 4.4, z: -4, mat: 'metal' }, 8);
       b.sphere(0.9, '#e9ecef', { x: 4, y: 6.6, z: -4, rx: -0.9, mat: 'metal' }, 16, 8, Math.PI * 0.35);
     }
-    ctx.workStyle = 0;
+    ctx.door = { out: [2.6, 2.7], in: [2.6, 0.4] };
+    ctx.spots = { car: [-1.1, 1.9, -Math.PI / 2], tyres: [4.6, 4.7, Math.PI] };
   },
 
   office(b, level, ctx) {
@@ -261,7 +265,8 @@ const MODELS = {
     b.box(1.0, 0.2, 0.1, '#4361ee', { x: 0.15, y: y - 1.55, z: 3.08, mat: 'neon' });
     planter(b, { x: -3.5, y: 0.4, z: 4.0 });
     planter(b, { x: 3.5, y: 0.4, z: 4.0 }, '#9775fa');
-    ctx.workStyle = 1;
+    ctx.door = { out: [0, 3.6], in: [0, 1.4] };
+    ctx.spots = { plaza: [-2.6, 5.0, 0.6] };
     ctx.height = y + 3.5;
   },
 
@@ -305,7 +310,8 @@ const MODELS = {
     if (level >= 6) {
       b.cyl(1.6, 1.6, 3, '#4dabf7', { x: 4.2, y: 0, z: -5.4 + 0.2, mat: 'metal' }, 18);
     }
-    ctx.workStyle = 0;
+    ctx.door = { out: [-1.8, 3.4], in: [-1.8, 1.0] };
+    ctx.spots = { pallets: [4.3, 3.5, Math.PI] };
   },
 
   lab(b, level, ctx) {
@@ -346,7 +352,8 @@ const MODELS = {
       for (let k = 0; k < 4; k++) b.torus(0.4 - k * 0.05, 0.08, '#b87333', { x: -4.8, y: 1.0 + k * 0.6, z: 3.4, rx: Math.PI / 2, mat: 'metal' }, Math.PI * 2, 6, 14);
       b.sphere(0.45, '#e0aaff', { x: -4.8, y: 3.9, z: 3.4, mat: 'neon' }, 14, 10);
     }
-    ctx.workStyle = 1;
+    ctx.door = { out: [0, 2.5], in: [0, 0.2] };
+    ctx.spots = { tanks: [3.9, 2.6, Math.PI / 2] };
   },
 
   mine(b, level, ctx) {
@@ -367,7 +374,7 @@ const MODELS = {
     for (const x of [-0.5, 0.5]) b.box(0.1, 0.1, 4.2, '#9ca3af', { x, y: 0.12, z: 3.6, mat: 'metal' });
     for (let i = 0; i < 6; i++) b.box(1.5, 0.1, 0.25, WOOD_D, { y: 0.02, z: 1.8 + i * 0.7 });
     // minecart
-    b.group({ x: 0, y: 0.2, z: 3.4 }, () => {
+    b.group({ x: 0, y: 0.2, z: 4.5 }, () => {
       b.box(1.5, 0.9, 1.6, '#4b5563', { y: 0.3, mat: 'metal' });
       b.box(1.6, 0.12, 1.7, '#374151', { y: 1.2, mat: 'metal' });
       for (const [x, z] of [[-0.6, 0.55], [0.6, 0.55], [-0.6, -0.55], [0.6, -0.55]]) {
@@ -395,7 +402,8 @@ const MODELS = {
       b.prism(2.8, 1.0, 2.4, '#713f12', { x: 4.2, y: 2.2, z: 3.0 });
       b.box(1.0, 0.8, 0.1, '#ffcf70', { x: 4.2, y: 1.0, z: 4.12, mat: 'lit' });
     }
-    ctx.workStyle = 0;
+    ctx.door = { out: [-1.0, 3.0], in: [-1.0, 0.6] };
+    ctx.spots = { cart: [1.45, 4.5, -Math.PI / 2] };
   },
 
   spaceport(b, level, ctx) {
@@ -481,7 +489,8 @@ const MODELS = {
         if (timer <= 0) { phase = 'idle'; timer = 35 + Math.random() * 25; rocket.scale.setScalar(1); }
       }
     });
-    ctx.workStyle = 1;
+    ctx.door = { out: [3.4, 5.0], in: [3.4, 3.0] };
+    ctx.spots = { pad: [-0.2, 3.9, Math.PI], fuel: [-4.7, 4.9, Math.PI] };
   },
 };
 
@@ -492,11 +501,11 @@ export function easeOutBack(x) {
 
 export function buildBusiness(typeId, level) {
   const b = new MeshBuilder();
-  const ctx = { emitters: [], animated: [], extra: [], workStyle: 0, height: 8 };
+  const ctx = { emitters: [], animated: [], extra: [], height: 8, door: null, spots: {} };
   MODELS[typeId](b, level, ctx);
   const group = b.build();
   for (const e of ctx.extra) group.add(e);
-  return { group, emitters: ctx.emitters, animated: ctx.animated, workStyle: ctx.workStyle, height: ctx.height };
+  return { group, emitters: ctx.emitters, animated: ctx.animated, height: ctx.height, door: ctx.door, spots: ctx.spots };
 }
 
 // ---------------------------------------------------------------------------
@@ -584,13 +593,16 @@ function makeCoinTexture() {
   g.fillStyle = grd;
   g.fillRect(0, 0, 256, 256);
   g.strokeStyle = '#a8740f';
-  g.lineWidth = 14;
-  g.beginPath(); g.arc(128, 128, 104, 0, Math.PI * 2); g.stroke();
+  g.lineWidth = 12;
+  g.beginPath(); g.arc(128, 128, 108, 0, Math.PI * 2); g.stroke();
+  // Swiss cross + CHF, like a 5-franc coin
   g.fillStyle = '#9a6a0c';
-  g.font = 'bold 160px Arial, sans-serif';
+  g.fillRect(108, 44, 40, 104);
+  g.fillRect(76, 76, 104, 40);
+  g.font = '900 44px Outfit, Arial, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
-  g.fillText('$', 128, 138);
+  g.fillText('CHF', 128, 186);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
@@ -598,9 +610,9 @@ function makeCoinTexture() {
 }
 
 // ---------------------------------------------------------------------------
-// Signboard with canvas text (standing at the front-left corner of a pad)
+// Signboard with canvas text (standing at the front corner of a pad)
 // ---------------------------------------------------------------------------
-export function buildSign(title, subtitle, color, icon = '') {
+export function buildSign(title, subtitle, color, iconName) {
   const c = document.createElement('canvas');
   c.width = 512; c.height = 192;
   const g = c.getContext('2d');
@@ -613,18 +625,19 @@ export function buildSign(title, subtitle, color, icon = '') {
   g.fillStyle = color;
   roundRect(g, 22, 22, 130, 148, 20);
   g.fill();
-  g.font = '86px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(icon, 87, 100);
+  g.fillStyle = 'rgba(0,0,0,0.18)';
+  roundRect(g, 22, 140, 130, 30, 14);
+  g.fill();
+  if (iconName) drawIcon(g, iconName, 37, 46, 100);
   g.textAlign = 'left';
+  g.textBaseline = 'middle';
   g.fillStyle = '#ffffff';
   let size = 46;
   g.font = `800 ${size}px Outfit, Arial, sans-serif`;
-  while (g.measureText(title).width > 330 && size > 26) { size -= 2; g.font = `800 ${size}px Outfit, Arial, sans-serif`; }
+  while (g.measureText(title).width > 320 && size > 24) { size -= 2; g.font = `800 ${size}px Outfit, Arial, sans-serif`; }
   g.fillText(title, 172, 76);
   g.fillStyle = color;
-  g.font = '700 34px Outfit, Arial, sans-serif';
+  g.font = '700 32px Outfit, Arial, sans-serif';
   g.fillText(subtitle, 172, 132);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -654,38 +667,172 @@ function roundRect(g, x, y, w, h, r) {
   g.closePath();
 }
 
+function canvasTexture(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'));
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
 // ---------------------------------------------------------------------------
-// Empty plot decoration ("For sale")
+// Empty plot decoration ("À vendre" + zone d'affectation)
 // ---------------------------------------------------------------------------
-let forSaleTex = null;
-export function buildForSale() {
-  if (!forSaleTex) {
-    const c = document.createElement('canvas');
-    c.width = 256; c.height = 128;
-    const g = c.getContext('2d');
-    g.fillStyle = '#fff8e7';
-    g.fillRect(0, 0, 256, 128);
-    g.strokeStyle = '#e03131';
-    g.lineWidth = 10;
-    g.strokeRect(5, 5, 246, 118);
-    g.fillStyle = '#e03131';
-    g.font = '900 50px Outfit, Arial, sans-serif';
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    g.fillText('À VENDRE', 128, 64);
-    forSaleTex = new THREE.CanvasTexture(c);
-    forSaleTex.colorSpace = THREE.SRGBColorSpace;
+const forSaleTex = {};
+export function buildForSale(zone) {
+  if (!forSaleTex[zone]) {
+    const industrial = zone === 'ZI';
+    forSaleTex[zone] = canvasTexture(256, 160, (g) => {
+      g.fillStyle = '#fff8e7';
+      g.fillRect(0, 0, 256, 160);
+      g.strokeStyle = '#e03131';
+      g.lineWidth = 10;
+      g.strokeRect(5, 5, 246, 150);
+      g.fillStyle = '#e03131';
+      g.font = '900 48px Outfit, Arial, sans-serif';
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText('À VENDRE', 128, 58);
+      g.fillStyle = industrial ? '#7c4a1e' : '#1d4ed8';
+      roundRect(g, 22, 96, 212, 44, 10);
+      g.fill();
+      g.fillStyle = '#ffffff';
+      g.font = '800 24px Outfit, Arial, sans-serif';
+      g.fillText(industrial ? 'ZONE INDUSTRIELLE' : 'ZONE MIXTE', 128, 119);
+    });
   }
   const grp = new THREE.Group();
   const b = new MeshBuilder();
   b.box(0.15, 1.6, 0.15, WOOD_D, {});
-  b.box(2.2, 1.15, 0.08, WOOD, { y: 1.1, z: -0.06 });
+  b.box(2.2, 1.45, 0.08, WOOD, { y: 1.0, z: -0.06 });
   grp.add(b.build());
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.0), new THREE.MeshStandardMaterial({ map: forSaleTex, roughness: 0.8 }));
-  plane.position.set(0, 1.675, 0.0);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 1.25), new THREE.MeshStandardMaterial({ map: forSaleTex[zone], roughness: 0.8 }));
+  plane.position.set(0, 1.72, 0.0);
   plane.castShadow = true;
   grp.add(plane);
   return grp;
+}
+
+// ---------------------------------------------------------------------------
+// Construction site: 1) gabarits (profile poles, mise à l'enquête publique)
+//                    2) chantier (fence, scaffolding, crane)
+// ---------------------------------------------------------------------------
+let enqueteTex = null;
+export function buildConstructionSite(color) {
+  const root = new THREE.Group();
+
+  // --- Phase 1: gabarits — the iconic Swiss profile poles ---
+  const gb = new MeshBuilder();
+  const corners = [[-5, -5], [5, -5], [5, 3], [-5, 3]];
+  const h = 7;
+  for (const [x, z] of corners) {
+    gb.box(0.14, h, 0.14, '#f1f3f5', { x, z });
+    for (let k = 0; k < 4; k++) gb.box(0.15, 0.35, 0.15, '#e03131', { x, y: h - 0.35 - k * 0.7, z });
+    gb.box(0.6, 0.1, 0.1, '#f1f3f5', { x, y: h - 0.05, z, ry: Math.PI / 4 });
+  }
+  gb.box(10, 0.06, 0.06, '#e03131', { y: h - 0.2, z: -5 });
+  gb.box(10, 0.06, 0.06, '#e03131', { y: h - 0.2, z: 3 });
+  gb.box(0.06, 0.06, 8, '#e03131', { x: -5, y: h - 0.2, z: -1 });
+  gb.box(0.06, 0.06, 8, '#e03131', { x: 5, y: h - 0.2, z: -1 });
+  const gabarits = gb.build();
+  if (!enqueteTex) {
+    enqueteTex = canvasTexture(256, 192, (g) => {
+      g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 192);
+      g.fillStyle = '#e03131'; g.fillRect(0, 0, 256, 50);
+      g.fillStyle = '#ffffff'; g.fillRect(16, 12, 26, 26);
+      g.fillStyle = '#e03131'; g.fillRect(26, 15, 6, 20); g.fillRect(19, 22, 20, 6);
+      g.fillStyle = '#ffffff'; g.font = '900 22px Outfit, Arial'; g.textBaseline = 'middle';
+      g.fillText('AVIS OFFICIEL', 56, 26);
+      g.fillStyle = '#1e2433'; g.font = '800 26px Outfit, Arial'; g.textAlign = 'center';
+      g.fillText('MISE À', 128, 84); g.fillText("L'ENQUÊTE", 128, 114); g.fillText('PUBLIQUE', 128, 144);
+      g.font = '600 15px Outfit, Arial'; g.fillStyle = '#5b6475';
+      g.fillText('Demande de permis de construire', 128, 174);
+    });
+  }
+  const board = new MeshBuilder();
+  board.box(0.12, 1.4, 0.12, '#5b6475', { x: -0.8, mat: 'metal' });
+  board.box(0.12, 1.4, 0.12, '#5b6475', { x: 0.8, mat: 'metal' });
+  const boardG = board.build();
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.42), new THREE.MeshStandardMaterial({ map: enqueteTex, roughness: 0.7 }));
+  plate.position.set(0, 1.7, 0.08);
+  boardG.add(plate);
+  boardG.position.set(-3.6, 0, 5.2);
+  boardG.rotation.y = 0.3;
+  gabarits.add(boardG);
+  root.add(gabarits);
+
+  // --- Phase 2: chantier ---
+  const cb = new MeshBuilder();
+  // fence
+  for (let i = 0; i < 12; i++) {
+    const x = -5.5 + i;
+    cb.box(0.95, 1.1, 0.06, i % 2 ? '#ff922b' : '#f8f9fa', { x: x + 0.5, z: 5.2 });
+  }
+  for (const x of [-6, 6]) cb.box(0.06, 1.1, 11, '#f8f9fa', { x, z: -0.3 });
+  // foundation & site hut (baraque de chantier)
+  cb.box(10, 0.4, 8, '#9aa0a6', { z: -1 });
+  cb.box(3.2, 2.4, 2.2, '#f2f2f2', { x: 3.6, z: 3.2 });
+  cb.box(3.3, 0.2, 2.3, '#495057', { x: 3.6, y: 2.4, z: 3.2 });
+  cb.box(0.9, 0.6, 0.05, '#a5d8ff', { x: 3.0, y: 1.3, z: 4.31, mat: 'lit' });
+  // material piles
+  for (let i = 0; i < 3; i++) cb.box(1.4, 0.25, 0.9, '#c9a46a', { x: -4, y: i * 0.26, z: 3.6 });
+  cb.cone(0.9, 0.9, '#d9c7a1', { x: -2.2, z: 3.8 }, 10);
+  const site = cb.build();
+  root.add(site);
+
+  // scaffolding grows with progress
+  const sb = new MeshBuilder();
+  const levels = 5;
+  for (let l = 0; l < levels; l++) {
+    const y = l * 1.6;
+    for (const [x, z] of [[-4.6, -4.6], [4.6, -4.6], [4.6, 2.6], [-4.6, 2.6], [0, 2.6], [0, -4.6]]) {
+      sb.cyl(0.05, 0.05, 1.6, '#adb5bd', { x, y: y + 0.4, z, mat: 'metal' }, 6);
+    }
+    sb.box(9.4, 0.08, 0.8, '#c08a4a', { y: y + 2.0, z: 3.0 });
+    sb.box(9.4, 0.05, 0.05, '#ff922b', { y: y + 2.8, z: 3.35 });
+    sb.box(0.8, 0.08, 7.4, '#c08a4a', { x: 5.0, y: y + 2.0, z: -1 });
+  }
+  const scaffold = sb.build();
+  root.add(scaffold);
+  // building core rising (grey concrete + building colour band)
+  const core = new MeshBuilder();
+  core.box(8.6, 1, 6.6, '#c5c9ce', {});
+  core.box(8.7, 0.12, 6.7, color, { y: 0.95 });
+  const coreMesh = core.build();
+  coreMesh.position.set(0, 0.4, -1);
+  root.add(coreMesh);
+
+  // tower crane
+  const kb = new MeshBuilder();
+  kb.box(0.6, 14, 0.6, '#ffd43b', { mat: 'metal' });
+  kb.box(1.4, 0.8, 1.4, '#495057', { y: 13.6 });
+  const crane = kb.build();
+  crane.position.set(-5.2, 0, -5.2);
+  const jibB = new MeshBuilder();
+  jibB.box(14, 0.45, 0.45, '#ffd43b', { x: 4, y: 0, mat: 'metal' });
+  jibB.box(2.2, 1.2, 1.0, '#495057', { x: -3.2, y: -1.1 });
+  jibB.cyl(0.02, 0.02, 4.5, '#212529', { x: 8, y: -4.5 }, 4);
+  jibB.box(0.8, 0.5, 0.8, '#868e96', { x: 8, y: -5.1, mat: 'metal' });
+  const jib = jibB.build();
+  jib.position.y = 14.4;
+  crane.add(jib);
+  root.add(crane);
+
+  const update = (progress, t) => {
+    const p1 = progress < 0.3;
+    gabarits.visible = p1;
+    site.visible = scaffold.visible = coreMesh.visible = crane.visible = !p1;
+    if (!p1) {
+      const k = (progress - 0.3) / 0.7;
+      coreMesh.scale.y = Math.max(0.01, k * 7.5);
+      scaffold.scale.y = Math.max(0.05, Math.min(1, 0.25 + k));
+      jib.rotation.y = Math.sin(t * 0.4) * 1.2 + 0.4;
+    }
+  };
+  update(0, 0);
+  return { group: root, update };
 }
 
 export { bush };

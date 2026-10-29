@@ -1,74 +1,62 @@
-# 🏦 Empire Inc. — Tycoon 3D
+# Empire SA — Tycoon 3D (droit suisse)
 
-Un jeu de gestion / tycoon en 3D dans le navigateur. Tu achètes des parcelles, tu construis des commerces,
-tu **embauches des PNJ qui travaillent pour toi** et qui **ramènent physiquement l'argent** au siège en marchant
-dans les rues de ta ville.
+Un jeu de gestion / tycoon en 3D dans le navigateur. Tu fondes une **société anonyme suisse**, tu achètes des
+parcelles, tu construis des commerces et tu **engages des PNJ** qui enchaînent leurs tâches — dans et hors des
+bâtiments — puis **rapportent la recette au Siège** à pied. Tout le système économique suit (en version
+simplifiée) le **droit suisse** : Loi sur le travail, Code des obligations, AVS/LPP, TVA, impôts cantonaux, LAT.
 
-## ▶️ Lancer le jeu
+## Lancer le jeu
 
 ```bash
 npm install
 npm run dev        # puis ouvre l'URL affichée (http://localhost:5173)
 ```
 
-Version optimisée :
+Version optimisée : `npm run build` (site statique dans `dist/`), puis `npm run preview`.
 
-```bash
-npm run build      # génère dist/ (site statique, déployable n'importe où : GitHub Pages, Netlify…)
-npm run preview
-```
+## Comment jouer
 
-## 🎮 Comment jouer
+1. **Choisis le canton du siège** (Zoug, Genève, Vaud, Zurich, Berne, Tessin…) : impôt sur le bénéfice,
+   salaire minimum et niveau des salaires changent.
+2. **Clique sur une parcelle libre** et dépose un permis de construire : **mise à l'enquête publique** (gabarits
+   rouges et blancs), puis **chantier** (grue, échafaudages), puis ouverture.
+3. **Engage du personnel** : Apprenti·e CFC → Employé·e CFC → Cadre (ES/HES), ou des Robots.
+4. Chaque employé suit le **déroulé de travail** de son commerce. Exemple à la boulangerie : entrer au fournil,
+   pétrir la pâte, cuire le pain, vendre en vitrine, servir la terrasse, puis livrer la recette au Siège.
+5. Agrandis tes bâtiments (10 niveaux), achète des **recherches**, surveille ta **Fiduciaire**.
 
-1. **Clique sur une parcelle libre** (le ✚ vert) et construis un commerce.
-2. **Embauche des employés** dans le panneau à droite. Chacun travaille à son poste, puis part
-   avec un sac d'argent jusqu'au **Siège 🏦** pour le déposer — et revient bosser.
-3. **Améliore tes bâtiments** (10 niveaux) : plus de revenus, plus de postes, et de meilleurs profils.
-4. **Promeus tes employés** : 🧢 Stagiaire → 👔 Employé → 🎓 Expert → 🤖 Robot.
-5. Achète des **recherches 🔬** qui boostent tout ton empire (vitesse, temps de travail, revenus).
+## Le droit suisse dans le jeu
 
-### Astuces
-- Clique sur le **Siège** pour encaisser de l'argent à la main.
-- Clique sur un **employé** pour le motiver ⚡ (il va 2x plus vite pendant quelques secondes).
-- Des **valises dorées 💼** apparaissent dans les rues : clique vite dessus !
-- Pendant l'**heure de pointe 🔥**, tous les revenus sont doublés.
-- Le jeu se **sauvegarde automatiquement** ; tes employés continuent de gagner (50 %) quand tu es absent (max 4 h).
+| Domaine | Règle appliquée |
+| --- | --- |
+| **Loi sur le travail (LTr)** | Humains : lun–ven 8h–17h, trajet domicile → travail, pause de midi de 30 min (art. 15, non payée), pas de travail de nuit ni le dimanche (art. 16, 18). Durée max. 45 h / 50 h par semaine (art. 9). |
+| **OLT 2 art. 27** | Les boulangeries peuvent ouvrir le dimanche matin (6h–11h). |
+| **Formation (LFPr)** | Les apprentis vont à l'école professionnelle le mercredi (jour payé) et obtiennent leur **CFC** après 10 jours ouvrés. |
+| **Code des obligations** | Période d'essai, puis délai de congé de 7 jours (art. 335b) ou d'un mois (art. 335c), payé si tu résilies un contrat. |
+| **Assurances sociales** | Part patronale AVS/AI/APG 5,3 %, AC 1,1 %, LPP ≈ 7 % (pas pour les apprentis), LAA selon le risque du métier, allocations familiales selon le canton. |
+| **Salaire minimum** | Genève, Neuchâtel, Bâle-Ville et le Tessin imposent un salaire horaire minimum (hors apprentis). |
+| **TVA (LTVA)** | Assujettissement dès CHF 100'000 de CA. Taux normal 8,1 %, réduit 2,6 % (limonade, boulangerie). Décompte hebdomadaire. |
+| **Impôt sur le bénéfice** | Taux effectif du canton choisi, prélevé chaque lundi. |
+| **LAT / permis de construire** | Zone mixte (commerces, bureaux) ou zone industrielle (usine, mine, spatioport). Émoluments du permis, enquête publique. |
+| **Registre du commerce** | Inscription obligatoire dès CHF 100'000 de CA. |
 
-### Contrôles
-| Action | Souris / clavier | Tactile |
-| --- | --- | --- |
-| Tourner la caméra | Clic gauche + glisser | 1 doigt |
-| Déplacer | Clic droit + glisser, ZQSD / WASD / flèches | 2 doigts |
-| Zoom | Molette | Pincer |
-| Fermer un panneau | Échap | ✕ |
+Les robots ne sont pas soumis à la LTr : ils travaillent 24h/24 mais coûtent 12 % du CA en entretien.
+La nuit et le week-end, quand plus personne ne travaille, le temps s'accélère.
 
-## 🏗️ Contenu
+> Taux et montants approximatifs (2024–2025), simplifiés pour le jeu — ce n'est pas un conseil juridique.
 
-| Commerce | Coût | Particularité |
-| --- | --- | --- |
-| 🍋 Stand de limonade | $25 | Parasols, citron géant |
-| 🥐 Boulangerie | $350 | Cheminée qui fume, terrasse |
-| 🔧 Garage auto | $4.5K | Voitures, pneus, enseigne néon |
-| 💻 Startup Tech | $55K | Tour de verre qui **grandit à chaque niveau** |
-| 🏭 Usine | $700K | Cheminées fumantes, silos |
-| 🧪 Laboratoire | $9M | Dôme avec noyau d'énergie animé |
-| 💎 Mine de diamants | $130M | Cristaux lumineux qui se multiplient |
-| 🚀 Spatioport | $2B | La fusée **décolle** régulièrement |
+## Technique
 
-## 🧱 Technique
-
-- **Three.js** (WebGL) + **Vite**, aucun asset externe : tous les modèles (bâtiments, PNJ, arbres, fusée…)
-  sont générés procéduralement et fusionnés en quelques draw calls (vertex colors).
-- Rendu : ombres douces, tone mapping ACES, **bloom** (néons, fenêtres la nuit), ciel physique,
-  **cycle jour/nuit** avec lampadaires, étoiles et lune.
-- PNJ animés (marche, travail, célébration) avec squelette procédural, trajets le long des allées.
-- Sons synthétisés en WebAudio, sauvegarde `localStorage`, interface responsive (mobile ok).
+- **Three.js** (WebGL) + **Vite**, aucun asset externe : bâtiments, PNJ, chantier, arbres et **icônes** (jeu
+  d'icônes vectorielles maison, utilisé en SVG dans l'interface et dessiné sur les enseignes 3D) sont générés par code.
+- Ombres douces, tone mapping ACES, bloom, ciel physique, cycle jour/nuit, sons WebAudio, sauvegarde `localStorage`.
 
 ```
 src/
 ├── engine/engine.js        rendu, caméra, post-processing
 ├── world/environment.js    ciel, terrain, allées, arbres, lac, jour/nuit
-├── models/                 générateurs de modèles 3D (bâtiments, personnages)
-├── game/                   logique : économie, PNJ, effets, sons, config
-└── ui/ui.js                HUD et panneaux
+├── models/                 bâtiments, chantier, personnages (procéduraux)
+├── game/config.js          données : commerces, tâches, cantons, lois
+├── game/game.js            simulation : calendrier, PNJ, paie, TVA, impôts
+└── ui/                     interface et icônes
 ```

@@ -1,28 +1,35 @@
 import * as THREE from 'three';
 import {
-  CELL, GRID, PAD, PAD_Y, MAX_LEVEL, SAVE_KEY, BUSINESSES, BIZ, WORKERS, UPGRADES,
-  FIRST_NAMES, ROBOT_NAMES, levelMult, slotsFor, buildCost, upgradeCost, hireCost, promoteCost, money,
+  CELL, GRID, PAD, PAD_Y, MAX_LEVEL, SAVE_KEY, BUSINESSES, BIZ, WORKERS, UPGRADES, LAW, CANTON, ZONES,
+  ROBOT_UPKEEP, FIRST_NAMES, ROBOT_NAMES, DAYS, levelMult, slotsFor, buildCost, upgradeCost, hireCost,
+  trainingCost, buildTime, money,
 } from './config.js';
-import { buildBusiness, buildHQ, buildSign, buildForSale, easeOutBack } from '../models/buildings.js';
+import { buildBusiness, buildHQ, buildSign, buildForSale, buildConstructionSite, easeOutBack } from '../models/buildings.js';
 import { createCharacter, animateCharacter, randomLook } from '../models/character.js';
 import { MeshBuilder, disposeObject } from '../models/builder.js';
 import { Effects } from './fx.js';
 import { Sound } from './audio.js';
 import { ROADS_Z, ROADS_X } from '../world/environment.js';
+import { icon } from '../ui/icons.js';
 
 const TIER = Object.fromEntries(WORKERS.map((w, i) => [w.id, { ...w, index: i }]));
 const WALK_Y = 0.23;
 const HQ_ROAD_Z = CELL / 2;
 const HQ_DEPOSIT_Z = 5.4;
-const DAY_LENGTH = 420; // seconds for a full day/night cycle
+const LANE_Z = 5.6;        // local z of the walkway lane in front of a building
+const EDGE_X = 47.5;       // where commuters enter / leave the city
+const SPEED_OPEN = 3;      // game minutes per real second while the city works
+const SPEED_CLOSED = 30;   // nights & week-ends fly by
 const SPOT_X = [0, 1.05, -1.05, 2.1, -2.1, 3.15, -3.15, -4.2].map((x) => x - 0.3);
-const _v = new THREE.Vector3();
 
 const lerpAngle = (a, b, t) => {
   let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI;
   if (d < -Math.PI) d += Math.PI * 2;
   return a + d * t;
 };
+const emptyLedger = () => ({ sales: 0, tva: 0, wages: 0, charges: { avs: 0, ac: 0, lpp: 0, laa: 0, af: 0 }, robots: 0, fees: 0 });
+const chargesTotal = (c) => c.avs + c.ac + c.lpp + c.laa + c.af;
+export const zoneOf = (i, j) => (Math.abs(i) === GRID || j === -GRID ? 'ZI' : 'ZM');
 
 // ===========================================================================
 class Plot {
@@ -30,26 +37,28 @@ class Plot {
     this.game = game;
     this.i = i; this.j = j;
     this.key = `${i},${j}`;
+    this.zone = zoneOf(i, j);
     this.center = new THREE.Vector3(i * CELL, 0, j * CELL);
     this.group = new THREE.Group();
     this.group.position.copy(this.center);
+    const industrial = this.zone === 'ZI';
 
     const b = new MeshBuilder();
-    b.box(PAD, PAD_Y - 0.02, PAD, '#c4bcad', {});
+    b.box(PAD, PAD_Y - 0.02, PAD, industrial ? '#aaa397' : '#c4bcad', {});
     this.group.add(b.build());
     const g = new MeshBuilder();
-    g.box(PAD - 0.7, 0.04, PAD - 0.7, '#5fa83a', { y: PAD_Y - 0.03 });
+    g.box(PAD - 0.7, 0.04, PAD - 0.7, industrial ? '#8f9f4c' : '#5fa83a', { y: PAD_Y - 0.03 });
     for (let k = 0; k < 7; k++) {
       g.sphere(0.12, ['#ffffff', '#ffd43b', '#ff8fab'][k % 3], { x: Math.sin(k * 7.3 + i) * 5, y: PAD_Y + 0.02, z: Math.cos(k * 3.1 + j) * 5, sy: 0.5 }, 6, 4);
     }
     this.grass = g.build();
     this.group.add(this.grass);
     const c = new MeshBuilder();
-    c.box(PAD - 0.7, 0.04, PAD - 0.7, '#d9d3c7', { y: PAD_Y - 0.03 });
+    c.box(PAD - 0.7, 0.04, PAD - 0.7, industrial ? '#c9c6bf' : '#d9d3c7', { y: PAD_Y - 0.03 });
     this.concrete = c.build();
     this.group.add(this.concrete);
 
-    this.forSale = buildForSale();
+    this.forSale = buildForSale(this.zone);
     this.forSale.position.set(4.3, PAD_Y, 4.6);
     this.forSale.rotation.y = -0.35;
     this.group.add(this.forSale);
@@ -63,7 +72,6 @@ class Plot {
       new THREE.RingGeometry(2.2, 2.6, 40).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({ color: new THREE.Color(0.4, 1.6, 0.9), transparent: true, opacity: 0.6, side: THREE.DoubleSide })
     );
-    ring.position.y = PAD_Y + 0.05 - 3;
     this.holo.add(ring);
     this.holoRing = ring;
     this.group.add(this.holo);
@@ -100,7 +108,7 @@ class Plot {
 
 // ===========================================================================
 class Building {
-  constructor(game, plot, typeId, level = 1) {
+  constructor(game, plot, typeId, level = 1, construction = 0) {
     this.game = game;
     this.plot = plot;
     this.typeId = typeId;
@@ -112,13 +120,33 @@ class Building {
     this.emitTimer = Math.random();
     this.anim = null;
     this.routeLength = this.computeRouteLength();
-    this.rebuild(false);
+    this.construction = null;
     plot.building = this;
     plot.setOccupied(true);
+    if (construction > 0) this.startConstruction(construction);
+    else this.rebuild(false);
   }
 
   get biz() { return BIZ[this.typeId]; }
   get slots() { return slotsFor(this.level); }
+  get open() { return !this.construction; }
+
+  startConstruction(remaining) {
+    const total = buildTime(this.biz);
+    this.construction = { total, t: total - remaining, site: buildConstructionSite(this.biz.color) };
+    this.root.add(this.construction.site.group);
+    this.makeSign();
+  }
+
+  makeSign() {
+    if (this.sign) { this.root.remove(this.sign); disposeObject(this.sign); }
+    const sub = this.construction ? 'En construction' : `Niveau ${this.level}`;
+    this.sign = buildSign(this.biz.name, sub, this.biz.color, this.typeId);
+    this.sign.position.set(5.15, 0, 5.4);
+    this.sign.rotation.y = -0.45;
+    this.sign.scale.setScalar(0.78);
+    this.root.add(this.sign);
+  }
 
   rebuild(animate) {
     if (this.model) {
@@ -127,19 +155,23 @@ class Building {
     }
     this.model = buildBusiness(this.typeId, this.level);
     this.root.add(this.model.group);
-    this.workStyle = this.model.workStyle;
-    if (this.sign) { this.root.remove(this.sign); disposeObject(this.sign); }
-    this.sign = buildSign(this.biz.name, `Niveau ${this.level}`, this.biz.color, this.biz.icon);
-    this.sign.position.set(5.15, 0, 5.4);
-    this.sign.rotation.y = -0.45;
-    this.sign.scale.setScalar(0.78);
-    this.root.add(this.sign);
+    this.makeSign();
     if (animate) this.anim = { t: 0, dur: 0.9 };
   }
 
-  spotPos(slot) {
-    return new THREE.Vector3(this.plot.center.x + SPOT_X[slot], WALK_Y, this.plot.center.z + 6.0);
+  // --- positions (world space; buildings are never rotated) ---
+  local(x, z) { return { x: this.plot.center.x + x, z: this.plot.center.z + z }; }
+  lane(x) { return { x, z: this.plot.center.z + LANE_Z }; }
+  spotPos(slot) { return { x: this.plot.center.x + SPOT_X[slot], z: this.plot.center.z + 6.0 }; }
+  doorOut() { const d = this.model.door; return this.local(d.out[0], d.out[1]); }
+  doorIn() { const d = this.model.door; return this.local(d.in[0], d.in[1]); }
+  station(name, slot) {
+    const [x, z, yaw] = this.model.spots[name];
+    const off = ((slot % 4) - 1.5) * 0.8;
+    const p = this.local(x + Math.cos(yaw) * off, z - Math.sin(yaw) * off);
+    return { ...p, yaw };
   }
+  roadZ() { return this.plot.center.z + CELL / 2; }
 
   computeRouteLength() {
     const { i, j } = this.plot;
@@ -154,6 +186,7 @@ class Building {
     return len + (HQ_ROAD_Z - HQ_DEPOSIT_Z);
   }
 
+  /** Spot → HQ deposit (toHQ) or HQ → spot (back). */
   makePath(slot, toHQ) {
     const { i, j } = this.plot;
     const cx = i * CELL, cz = j * CELL;
@@ -161,13 +194,13 @@ class Building {
     const jz = (Math.random() - 0.5) * 2.6;
     const spot = this.spotPos(slot);
     const zr = cz + CELL / 2 + jz;
-    const pts = [new THREE.Vector3(spot.x, WALK_Y, zr)];
+    const pts = [{ x: spot.x, z: zr }];
     if (j !== 0) {
       const xr = (i === 0 ? CELL / 2 : cx - Math.sign(i) * CELL / 2) + jx;
-      pts.push(new THREE.Vector3(xr, WALK_Y, zr), new THREE.Vector3(xr, WALK_Y, HQ_ROAD_Z + jz));
+      pts.push({ x: xr, z: zr }, { x: xr, z: HQ_ROAD_Z + jz });
     }
     const hx = (Math.random() - 0.5) * 6.5;
-    pts.push(new THREE.Vector3(hx, WALK_Y, HQ_ROAD_Z + jz), new THREE.Vector3(hx, WALK_Y, HQ_DEPOSIT_Z));
+    pts.push({ x: hx, z: HQ_ROAD_Z + jz }, { x: hx, z: HQ_DEPOSIT_Z });
     if (toHQ) return pts;
     pts.reverse();
     pts.push(spot);
@@ -178,11 +211,12 @@ class Building {
     return this.biz.income * levelMult(this.level) * tier.mult * this.game.incomeMult;
   }
 
-  estimatedRate() {
+  estimatedRate(liveOnly = false) {
     let r = 0;
     for (const w of this.workers) {
+      if (liveOnly && !w.active) continue;
       const t = w.tier;
-      const cycle = w.workTime() + (2 * this.routeLength) / (t.speed * this.game.speedMult) + 0.7;
+      const cycle = w.workTime() + (2 * this.routeLength + 10) / (t.speed * this.game.speedMult) + 0.7;
       r += this.tripIncome(t) / cycle;
     }
     return r;
@@ -191,6 +225,16 @@ class Building {
   toWorld(v) { return this.root.localToWorld(v); }
 
   update(dt, t) {
+    if (this.construction) {
+      const c = this.construction;
+      c.t += dt;
+      c.site.update(c.t / c.total, t);
+      if (this.game.frame % 20 === 0 && c.t / c.total > 0.3) {
+        this.game.fx.puff(this.toWorld(new THREE.Vector3((Math.random() - 0.5) * 8, 0.5, (Math.random() - 0.5) * 6 - 1)), { color: '#d9cbb3', size: 0.8, life: 1.5, up: 0.8, spread: 1 });
+      }
+      if (c.t >= c.total) this.game.finishConstruction(this);
+      return;
+    }
     if (this.anim) {
       this.anim.t += dt;
       const k = Math.min(1, this.anim.t / this.anim.dur);
@@ -199,7 +243,8 @@ class Building {
       if (k >= 1) { this.model.group.scale.set(1, 1, 1); this.anim = null; }
     }
     for (const fn of this.model.animated) fn(t, dt, this.game.fx, (v) => this.toWorld(v));
-    if (this.model.emitters.length) {
+    const busy = this.workers.some((w) => w.active);
+    if (this.model.emitters.length && busy) {
       this.emitTimer -= dt;
       if (this.emitTimer <= 0) {
         this.emitTimer = 0.35;
@@ -225,9 +270,10 @@ class Worker {
     this.game = game;
     this.building = building;
     this.data = data;
+    data.days ??= 0;
     this.slot = slot;
-    this.state = 'working';
-    this.timer = Math.random() * 1.5;
+    this.state = 'home';
+    this.timer = 0;
     this.path = null;
     this.seg = 0;
     this.phase = Math.random() * 10;
@@ -235,11 +281,19 @@ class Worker {
     this.boost = 0;
     this.carry = 0;
     this.yaw = Math.PI;
+    this.taskIndex = 0;
+    this.inside = false;
+    this.paused = false;
+    this.side = building.plot.center.x === 0 ? (data.seed % 2 ? 1 : -1) : Math.sign(building.plot.center.x);
     this.buildChar();
-    this.char.root.position.copy(building.spotPos(slot));
+    this.setVisible(false);
   }
 
   get tier() { return TIER[this.data.tier]; }
+  get human() { return this.tier.human; }
+  get task() { return this.building.biz.tasks[this.taskIndex]; }
+  /** On site (counts for live income / time speed). */
+  get active() { return this.state !== 'home'; }
 
   buildChar() {
     const look = randomLook(this.data.seed, this.data.tier, this.building.biz.color);
@@ -247,7 +301,9 @@ class Worker {
     c.hit.userData = { type: 'worker', worker: this };
     if (this.char) {
       c.root.position.copy(this.char.root.position);
+      c.root.rotation.y = this.char.root.rotation.y;
       c.bag.visible = this.char.bag.visible;
+      c.root.visible = this.char.root.visible;
       this.game.scene.remove(this.char.root);
       disposeObject(this.char.root);
     }
@@ -256,12 +312,39 @@ class Worker {
     this.game.scene.add(c.root);
   }
 
+  setVisible(v) { this.char.root.visible = v; }
+  setPos(p) { this.char.root.position.set(p.x, WALK_Y, p.z); }
+
   workTime() {
     return this.building.biz.workTime * this.tier.workMul * this.game.workMult;
   }
 
+  taskDuration(k) {
+    const tasks = this.building.biz.tasks;
+    const sum = tasks.reduce((a, t) => a + t.w, 0);
+    return this.workTime() * (tasks[k].w / sum);
+  }
+
   statusLabel() {
-    return { working: 'Travaille', toHQ: 'Livre l\'argent', deposit: 'Dépose', toWork: 'Retourne au travail' }[this.state];
+    const g = this.game;
+    switch (this.state) {
+      case 'home': {
+        if (!this.human) return 'En maintenance';
+        const shift = g.shiftFor(this, g.weekday);
+        if (shift?.school) return 'À l\'école professionnelle';
+        if (g.weekday === 6) return 'Repos dominical (LTr art. 18)';
+        if (g.weekday === 5) return 'Congé (week-end)';
+        return g.hour < 12 ? 'À la maison' : 'Rentré·e (fin de journée)';
+      }
+      case 'commuteIn': return 'En route pour le travail';
+      case 'commuteOut': return 'Rentre à la maison';
+      case 'move': return `${this.task.label} (en chemin)`;
+      case 'task': return this.paused ? 'Pause de midi (LTr art. 15)' : this.task.label;
+      case 'toHQ': return 'Apporte la recette au Siège';
+      case 'deposit': return 'Dépose la recette';
+      case 'toWork': return 'Retourne au travail';
+      default: return '';
+    }
   }
 
   followPath(dt, speed) {
@@ -275,6 +358,7 @@ class Worker {
         pos.x = target.x; pos.z = target.z;
         remaining -= d;
         this.seg++;
+        if (target.hide) { this.inside = true; this.setVisible(false); }
       } else {
         pos.x += (dx / d) * remaining;
         pos.z += (dz / d) * remaining;
@@ -285,40 +369,123 @@ class Worker {
     return this.seg >= this.path.length;
   }
 
+  /** Leave the building (if inside) — returns the point to continue from. */
+  exitPoints(pts) {
+    const b = this.building;
+    if (this.inside) {
+      this.inside = false;
+      this.setPos(b.doorIn());
+      this.setVisible(true);
+      const out = b.doorOut();
+      pts.push(out);
+      return out;
+    }
+    const p = this.char.root.position;
+    return { x: p.x, z: p.z };
+  }
+
+  planTask(k) {
+    const b = this.building;
+    this.taskIndex = k;
+    const task = this.task;
+    const pts = [];
+    if (task.at === 'in' && b.model.door) {
+      if (!this.inside) {
+        const p = this.char.root.position;
+        const out = b.doorOut(), inn = b.doorIn();
+        pts.push(b.lane(p.x), b.lane(out.x), out, { ...inn, hide: true });
+      }
+      this.taskYaw = Math.PI;
+    } else {
+      const from = this.exitPoints(pts);
+      const st = b.station(task.at === 'in' ? Object.keys(b.model.spots)[0] : task.at, this.slot);
+      pts.push(b.lane(from.x), b.lane(st.x), st);
+      this.taskYaw = st.yaw;
+    }
+    this.path = pts;
+    this.seg = 0;
+    this.state = 'move';
+    this.timer = 0;
+  }
+
+  goDeliver() {
+    const b = this.building;
+    this.carry = b.tripIncome(this.tier);
+    this.char.bag.visible = true;
+    const pts = [];
+    const from = this.exitPoints(pts);
+    const spot = b.spotPos(this.slot);
+    pts.push(b.lane(from.x), b.lane(spot.x), spot, ...b.makePath(this.slot, true));
+    this.path = pts;
+    this.seg = 0;
+    this.state = 'toHQ';
+  }
+
+  goHome(fromHQ = false) {
+    const b = this.building;
+    const pts = [];
+    if (fromHQ) {
+      const p = this.char.root.position;
+      const z = HQ_ROAD_Z + (Math.random() - 0.5) * 2.4;
+      pts.push({ x: p.x, z }, { x: this.side * EDGE_X, z });
+    } else {
+      const from = this.exitPoints(pts);
+      const spot = b.spotPos(this.slot);
+      const zr = b.roadZ() + (Math.random() - 0.5) * 2.4;
+      pts.push(b.lane(from.x), b.lane(spot.x), spot, { x: spot.x, z: zr }, { x: this.side * EDGE_X, z: zr });
+    }
+    this.char.bag.visible = false;
+    this.path = pts;
+    this.seg = 0;
+    this.state = 'commuteOut';
+  }
+
+  commuteIn() {
+    const b = this.building;
+    const spot = b.spotPos(this.slot);
+    const zr = b.roadZ() + (Math.random() - 0.5) * 2.4;
+    this.setPos({ x: this.side * EDGE_X, z: zr });
+    this.setVisible(true);
+    this.inside = false;
+    this.path = [{ x: spot.x, z: zr }, spot];
+    this.seg = 0;
+    this.state = 'commuteIn';
+  }
+
+  /** Start working right here (hired mid-shift / game loaded during work hours). */
+  startOnSite() {
+    this.setPos(this.building.spotPos(this.slot));
+    this.setVisible(true);
+    this.inside = false;
+    this.planTask(0);
+  }
+
   update(dt, t) {
     const g = this.game;
     const c = this.char;
     if (this.boost > 0) this.boost -= dt;
     const bmul = this.boost > 0 ? 2 : 1;
+    const onShift = g.onShift(this);
+    this.paused = this.human && g.inPause(this);
+
+    if (this.human && !onShift && (this.state === 'move' || this.state === 'task')) this.goHome();
+
     switch (this.state) {
-      case 'working': {
-        this.timer += dt * bmul;
-        this.yaw = Math.PI;
-        animateCharacter(c, 'work', t * bmul + this.phase, 0, this.building.workStyle);
-        if (this.timer >= this.workTime()) {
-          this.carry = this.building.tripIncome(this.tier);
-          c.bag.visible = true;
-          this.path = this.building.makePath(this.slot, true);
-          this.seg = 0;
-          this.state = 'toHQ';
+      case 'home':
+        if (g.shouldCommute(this)) this.commuteIn();
+        return;
+      case 'task': {
+        if (this.paused) {
+          animateCharacter(c, 'coffee', t + this.phase, 0);
+          break;
         }
-        break;
-      }
-      case 'toHQ':
-      case 'toWork': {
-        const speed = this.tier.speed * g.speedMult * bmul;
-        this.walkPhase += dt * speed * 2.0;
-        animateCharacter(c, this.state === 'toHQ' ? 'carry' : 'walk', t, this.walkPhase);
-        if (this.followPath(dt, speed)) {
-          if (this.state === 'toHQ') {
-            this.state = 'deposit';
-            this.timer = 0;
-            c.bag.visible = false;
-            g.deposit(this);
-          } else {
-            this.state = 'working';
-            this.timer = 0;
-          }
+        this.timer += dt * bmul;
+        this.yaw = this.taskYaw;
+        animateCharacter(c, this.task.anim, t * bmul + this.phase, 0);
+        if (this.timer >= this.taskDuration(this.taskIndex)) {
+          const next = this.taskIndex + 1;
+          if (next < this.building.biz.tasks.length) this.planTask(next);
+          else this.goDeliver();
         }
         break;
       }
@@ -327,11 +494,36 @@ class Worker {
         this.yaw = Math.PI;
         animateCharacter(c, 'cheer', t + this.phase, 0);
         if (this.timer > 0.65) {
-          this.path = this.building.makePath(this.slot, false);
-          this.seg = 0;
-          this.state = 'toWork';
+          if (this.human && !onShift) this.goHome(true);
+          else {
+            this.path = this.building.makePath(this.slot, false);
+            this.seg = 0;
+            this.state = 'toWork';
+          }
         }
         break;
+      }
+      default: {
+        // walking states: move, toHQ, toWork, commuteIn, commuteOut
+        const speed = this.tier.speed * g.speedMult * bmul;
+        this.walkPhase += dt * speed * 2.0;
+        animateCharacter(c, this.state === 'toHQ' ? 'carry' : 'walk', t, this.walkPhase);
+        if (this.followPath(dt, speed)) {
+          const s = this.state;
+          if (s === 'move') { this.state = 'task'; this.timer = 0; }
+          else if (s === 'toHQ') {
+            this.state = 'deposit';
+            this.timer = 0;
+            c.bag.visible = false;
+            g.deposit(this);
+          } else if (s === 'toWork' || s === 'commuteIn') {
+            if (this.human && !onShift) this.goHome();
+            else this.planTask(0);
+          } else if (s === 'commuteOut') {
+            this.state = 'home';
+            this.setVisible(false);
+          }
+        }
       }
     }
     c.root.rotation.y = lerpAngle(c.root.rotation.y, this.yaw, Math.min(1, dt * 12));
@@ -354,14 +546,20 @@ export class Game {
     this.sound = new Sound();
     this.listeners = {};
 
+    this.canton = null;
     this.cash = 40;
     this.totalEarned = 0;
     this.upgrades = new Set();
-    this.tod = 0.3;
+    this.clock = 7 * 60 + 30; // game minutes since Monday 00:00 of week 1
+    this.clockSpeed = SPEED_OPEN;
     this.time = 0;
-    this.stats = { deposits: 0, clicks: 0, golden: 0, playTime: 0, best: 0 };
+    this.stats = { deposits: 0, clicks: 0, golden: 0, playTime: 0, wagesPaid: 0, taxesPaid: 0, tvaPaid: 0 };
     this.tutorial = 0;
     this.milestone = 0;
+    this.tvaRegistered = false;
+    this.week = emptyLedger();
+    this.lastWeek = null;
+    this.pending = { wages: 0, charges: 0 };
     this.rush = 0;
     this.nextRush = 150 + Math.random() * 120;
     this.nextGolden = 40;
@@ -370,11 +568,11 @@ export class Game {
     this.plots = new Map();
     this.buildings = new Map();
     this.workers = [];
-    this.pickables = [];
     this.selected = null;
-    this.hovered = null;
     this.frame = 0;
     this.rateCache = 0;
+    this.liveRateCache = 0;
+    this.cheapestCache = Infinity;
 
     this.createHQ();
     for (let i = -GRID; i <= GRID; i++) {
@@ -392,6 +590,60 @@ export class Game {
   // ---------------- events ----------------
   on(ev, fn) { (this.listeners[ev] ||= []).push(fn); }
   emit(ev, data) { (this.listeners[ev] || []).forEach((fn) => fn(data)); }
+  toast(text, iconName = 'info', kind = '') { this.emit('toast', { text, icon: iconName, kind }); }
+
+  // ---------------- calendar ----------------
+  get day() { return Math.floor(this.clock / 1440); }
+  get weekday() { return this.day % 7; }
+  get hour() { return (this.clock % 1440) / 60; }
+  get weekNo() { return Math.floor(this.day / 7) + 1; }
+  get tod() { return this.hour / 24; }
+  get cantonData() { return CANTON[this.canton] || CANTON.ZG; }
+
+  /** Legal working schedule of a worker for a given weekday (LTr / LFPr / OLT 2). */
+  shiftFor(w, wd) {
+    if (!w.human) return { start: 0, end: 24, pause: false };
+    if (wd === 6) return w.building.biz.sunday ? { start: 6, end: 11, pause: false, sunday: true } : null;
+    if (wd === 5) return null;
+    if (w.data.tier === 'apprentice' && wd === LAW.schoolDay) return { school: true, start: LAW.shiftStart, end: LAW.shiftEnd, pause: true };
+    return { start: LAW.shiftStart, end: LAW.shiftEnd, pause: true };
+  }
+  onShift(w) {
+    const s = this.shiftFor(w, this.weekday);
+    if (!s || s.school) return false;
+    const h = this.hour;
+    return h >= s.start - 1 && h < s.end;
+  }
+  inPause(w) {
+    const s = this.shiftFor(w, this.weekday);
+    const h = this.hour;
+    return !!(s && s.pause && h >= LAW.pauseStart && h < LAW.pauseEnd);
+  }
+  shouldCommute(w) {
+    if (!w.human) return true;
+    const s = this.shiftFor(w, this.weekday);
+    if (!s || s.school) return false;
+    const offset = ((w.data.seed % 40) + 5) / 60;
+    const h = this.hour;
+    return h >= s.start - 1 + offset && h < s.end - 0.5;
+  }
+  /** Paid working time (pauses are not working time, art. 15 LTr; school days are paid). */
+  isPaidNow(w) {
+    if (!w.human) return false;
+    const s = this.shiftFor(w, this.weekday);
+    if (!s) return false;
+    const h = this.hour;
+    if (h < s.start || h >= s.end) return false;
+    return !(s.pause && h >= LAW.pauseStart && h < LAW.pauseEnd);
+  }
+  weeklyHours(w) {
+    let total = 0;
+    for (let d = 0; d < 7; d++) {
+      const s = this.shiftFor(w, d);
+      if (s) total += s.end - s.start - (s.pause ? LAW.pauseEnd - LAW.pauseStart : 0);
+    }
+    return total;
+  }
 
   // ---------------- multipliers ----------------
   get incomeMult() {
@@ -410,16 +662,128 @@ export class Game {
     return m;
   }
   get goldenMult() { return this.upgrades.has('golden') ? 3 : 1; }
-  get rate() { return this.rateCache * (this.rush > 0 ? 2 : 1); }
+  get rate() { return this.liveRateCache * (this.rush > 0 ? 2 : 1); }
+  get nominalRate() { return this.rateCache; }
   get clickValue() { return Math.max(1, Math.round(1 + this.rateCache * 0.12)); }
+  get isOpen() { return this.workers.some((w) => w.active && w.human) || this.workers.some((w) => !w.human); }
 
   computeRate() {
-    let r = 0;
-    for (const b of this.buildings.values()) r += b.estimatedRate();
+    let r = 0, live = 0;
+    for (const b of this.buildings.values()) {
+      r += b.estimatedRate();
+      live += b.estimatedRate(true);
+    }
     this.rateCache = r;
+    this.liveRateCache = live;
     return r;
   }
 
+  // ---------------- Swiss payroll & taxes ----------------
+  wage(w) {
+    if (!w.human) return 0;
+    const c = this.cantonData;
+    let h = w.building.biz.income * w.tier.wageMul * c.wageIdx;
+    if (c.minWage && w.data.tier !== 'apprentice') h = Math.max(h, c.minWage);
+    return h;
+  }
+  chargeRates(w) {
+    const apprentice = w.data.tier === 'apprentice';
+    return {
+      avs: LAW.avs,
+      ac: LAW.ac,
+      lpp: apprentice ? 0 : LAW.lpp, // salaire sous le seuil d'entrée LPP
+      laa: w.building.biz.laa,
+      af: this.cantonData.af,
+    };
+  }
+  employerCostRate(w) {
+    const r = this.chargeRates(w);
+    return 1 + r.avs + r.ac + r.lpp + r.laa + r.af;
+  }
+  /** Indemnité de délai de congé (CO art. 335b / 335c). */
+  severance(w) {
+    if (!w.human) return 0;
+    const days = w.data.days < LAW.trialDays ? LAW.noticeTrialDays : LAW.noticeDays;
+    return this.wage(w) * 8.5 * days * this.employerCostRate(w);
+  }
+  tvaRate(biz) { return biz.tva === 'reduit' ? LAW.tvaReduit : LAW.tvaNormal; }
+
+  accruePayroll(minutes) {
+    if (minutes <= 0) return;
+    for (const w of this.workers) {
+      if (!this.isPaidNow(w)) continue;
+      const gross = (this.wage(w) * minutes) / 60;
+      const r = this.chargeRates(w);
+      this.week.wages += gross;
+      this.pending.wages += gross;
+      let ch = 0;
+      for (const k of Object.keys(r)) {
+        this.week.charges[k] += gross * r[k];
+        ch += gross * r[k];
+      }
+      this.pending.charges += ch;
+    }
+  }
+
+  payPayroll() {
+    const total = this.pending.wages + this.pending.charges;
+    if (total < 0.01) return;
+    this.cash -= total;
+    this.stats.wagesPaid += total;
+    this.toast(`Salaires du jour versés : ${money(this.pending.wages)} + charges sociales ${money(this.pending.charges)}`, 'contract');
+    this.pending = { wages: 0, charges: 0 };
+    this.emit('change');
+  }
+
+  settleWeek() {
+    const w = this.week;
+    const cantonTax = this.cantonData.tax;
+    const profit = w.sales - w.wages - chargesTotal(w.charges) - w.robots - w.fees;
+    const tax = Math.max(0, profit) * cantonTax;
+    this.cash -= w.tva + tax;
+    this.stats.taxesPaid += tax;
+    this.stats.tvaPaid += w.tva;
+    this.lastWeek = { ...w, charges: { ...w.charges }, profit, tax, weekNo: this.weekNo - 1, canton: this.canton };
+    this.week = emptyLedger();
+    this.toast(`Décompte de la semaine ${this.lastWeek.weekNo} : TVA ${money(w.tva)} · impôt ${money(tax)}`, 'receipt', 'gold');
+    this.emit('settlement', this.lastWeek);
+    this.emit('change');
+  }
+
+  onNewDay(prevWeekday) {
+    // count worked days (probation / apprenticeship progress)
+    for (const w of this.workers) {
+      if (!w.human) continue;
+      const s = this.shiftFor(w, prevWeekday);
+      if (!s) continue;
+      w.data.days++;
+      if (w.data.tier === 'apprentice' && !w.data.cfc && w.data.days >= LAW.cfcDays) {
+        w.data.cfc = true;
+        this.toast(`${w.data.name} a obtenu son CFC ! Tu peux l'engager comme employé·e.`, 'expert', 'gold');
+        this.emit('change');
+      }
+    }
+    if (this.weekday === 0) this.settleWeek();
+  }
+
+  updateClock(dt) {
+    const hour = this.hour;
+    const wd = this.weekday;
+    const humansOnSite = this.workers.some((w) => w.human && w.active);
+    const officeHours = wd < 5 && hour >= 7 && hour < 18;
+    const target = humansOnSite || officeHours || this.rush > 0 ? SPEED_OPEN : SPEED_CLOSED;
+    this.clockSpeed += (target - this.clockSpeed) * Math.min(1, dt * 3);
+    const minutes = dt * this.clockSpeed;
+    const prevDay = this.day;
+    const prevHour = hour;
+    this.accruePayroll(minutes);
+    this.clock += minutes;
+    if (prevHour < 18 && this.hour >= 18) this.payPayroll();
+    if (prevHour < 11.1 && this.hour >= 11.1 && wd === 6) this.payPayroll();
+    if (this.day !== prevDay) this.onNewDay(wd);
+  }
+
+  // ---------------- economy helpers ----------------
   countType(typeId) {
     let n = 0;
     for (const b of this.buildings.values()) if (b.typeId === typeId) n++;
@@ -430,33 +794,33 @@ export class Game {
     return this.countType(BUSINESSES[biz.index - 1].id) > 0;
   }
   buildPrice(typeId) { return buildCost(BIZ[typeId], this.countType(typeId)); }
+  permitFee(typeId) { return this.buildPrice(typeId) * LAW.permitRate; }
   upgradePrice(b) { return upgradeCost(b.biz, b.level); }
   hirePrice(b, tierId) { return hireCost(b.biz, TIER[tierId], b.workers.length); }
-  promotePrice(w) {
-    const next = WORKERS[w.tier.index + 1];
-    return next ? promoteCost(w.building.biz, w.tier, next) : Infinity;
-  }
-  /** Empty plots next to the HQ or to an owned building are highlighted. */
-  isFrontier(p) {
-    for (let di = -1; di <= 1; di++) {
-      for (let dj = -1; dj <= 1; dj++) {
-        const i = p.i + di, j = p.j + dj;
-        if (i === 0 && j === 0) return true;
-        if (this.buildings.has(`${i},${j}`)) return true;
-      }
+  promotion(w) {
+    if (w.data.tier === 'apprentice') {
+      return { to: TIER.employee, cost: 0, ok: !!w.data.cfc, reason: w.data.cfc ? '' : `CFC dans ${Math.max(0, LAW.cfcDays - w.data.days)} j` };
     }
-    return false;
+    if (w.data.tier === 'employee') {
+      const ok = w.building.level >= TIER.expert.unlock;
+      return { to: TIER.expert, cost: trainingCost(w.building.biz, w.tier, TIER.expert), ok, reason: ok ? '' : `Niv. ${TIER.expert.unlock}` };
+    }
+    return null;
   }
-
   cheapestBuild() {
     let m = Infinity;
-    for (const b of BUSINESSES) if (this.isUnlocked(BIZ[b.id])) m = Math.min(m, this.buildPrice(b.id));
+    for (const b of BUSINESSES) if (this.isUnlocked(BIZ[b.id])) m = Math.min(m, this.buildPrice(b.id) + this.permitFee(b.id));
     return m;
   }
 
-  spend(amount) {
-    if (this.cash + 1e-9 < amount) { this.sound.error(); this.emit('toast', { text: 'Pas assez d\'argent 💸', kind: 'error' }); return false; }
+  spend(amount, fee = false) {
+    if (this.cash + 1e-9 < amount) {
+      this.sound.error();
+      this.toast(this.cash < 0 ? 'Compte à découvert : rembourse d\'abord tes dettes' : 'Pas assez d\'argent', 'warning', 'error');
+      return false;
+    }
     this.cash -= amount;
+    if (fee) this.week.fees += amount;
     return true;
   }
 
@@ -470,17 +834,17 @@ export class Game {
     if (plot.building) return false;
     const biz = BIZ[typeId];
     if (!free) {
-      if (!this.isUnlocked(biz)) return false;
-      if (!this.spend(this.buildPrice(typeId))) return false;
+      if (!this.isUnlocked(biz) || !biz.zones.includes(plot.zone)) return false;
+      const price = this.buildPrice(typeId), fee = this.permitFee(typeId);
+      if (!this.spend(price + fee)) return false;
+      this.week.fees += fee;
     }
-    const b = new Building(this, plot, typeId, 1);
+    const b = new Building(this, plot, typeId, 1, free ? 0 : buildTime(biz));
     this.buildings.set(plot.key, b);
     if (!free) {
-      b.rebuild(true);
-      this.fx.dust(b.root.position.clone(), 22);
-      this.fx.sparkle(b.root.position.clone().add(new THREE.Vector3(0, 4, 0)), biz.color, 20);
+      this.fx.dust(b.root.position.clone(), 16);
       this.sound.build();
-      this.emit('toast', { text: `${biz.icon} ${biz.name} construit !`, kind: 'success' });
+      this.toast(`Permis de construire déposé : ${biz.name} (mise à l'enquête publique)`, 'crane', 'success');
       if (this.tutorial === 0) this.setTutorial(1);
       this.select(b);
     }
@@ -489,40 +853,58 @@ export class Game {
     return b;
   }
 
+  finishConstruction(b) {
+    b.root.remove(b.construction.site.group);
+    disposeObject(b.construction.site.group);
+    b.construction = null;
+    b.rebuild(true);
+    this.fx.dust(b.root.position.clone(), 22);
+    this.fx.sparkle(b.root.position.clone().add(new THREE.Vector3(0, 4, 0)), b.biz.color, 24);
+    this.sound.buy();
+    this.toast(`${b.biz.name} ouvre ses portes !`, b.typeId, 'success');
+    if (this.tutorial === 1) this.setTutorial(2);
+    this.emit('change');
+  }
+
   upgrade(b) {
-    if (b.level >= MAX_LEVEL) return;
+    if (b.level >= MAX_LEVEL || !b.open) return;
     if (!this.spend(this.upgradePrice(b))) return;
     b.level++;
     b.rebuild(true);
     this.fx.sparkle(b.root.position.clone().add(new THREE.Vector3(0, 5, 0)), '#ffe066', 24);
     this.fx.dust(b.root.position.clone(), 14);
     this.sound.buy();
-    this.emit('toast', { text: `${b.biz.icon} ${b.biz.name} → niveau ${b.level}`, kind: 'success' });
-    if (this.tutorial === 3) this.setTutorial(4);
+    this.toast(`${b.biz.name} → niveau ${b.level}`, 'up', 'success');
     this.computeRate();
     this.emit('change');
   }
 
   hire(b, tierId, free = false, data = null) {
-    if (b.workers.length >= b.slots) return null;
+    if (b.workers.length >= b.slots || (!free && !b.open)) return null;
     const tier = TIER[tierId];
     if (!free) {
       if (b.level < tier.unlock) return null;
-      if (!this.spend(this.hirePrice(b, tierId))) return null;
+      if (!this.spend(this.hirePrice(b, tierId), true)) return null;
     }
     const d = data || {
       tier: tierId,
       seed: (Math.random() * 1e9) | 0,
       name: this.randomName(tierId),
+      days: 0,
     };
     const w = new Worker(this, b, d, b.workers.length);
     b.workers.push(w);
     this.workers.push(w);
     if (!free) {
-      this.fx.puff(w.char.root.position.clone().add(new THREE.Vector3(0, 1.2, 0)), { color: '#ffffff', size: 0.8, life: 0.8, up: 1, spread: 1.4, radial: 3, count: 12 });
-      this.fx.float(w.char.root.position.clone().add(new THREE.Vector3(0, 3.2, 0)), `${tier.icon} ${d.name} embauché !`, 'float-info');
+      if (this.onShift(w) || !w.human) {
+        w.startOnSite();
+        this.fx.puff(w.char.root.position.clone().add(new THREE.Vector3(0, 1.2, 0)), { color: '#ffffff', size: 0.8, life: 0.8, up: 1, spread: 1.4, radial: 3, count: 12 });
+      }
+      const p = b.spotPos(w.slot);
+      this.fx.float(new THREE.Vector3(p.x, 3.4, p.z), `${icon('contract')} Contrat signé : ${d.name}`, 'float-info');
+      if (w.human && !this.onShift(w)) this.toast(`${d.name} commencera au prochain horaire légal (lun–ven, 8h–17h)`, 'calendar');
       this.sound.buy();
-      if (this.tutorial === 1) this.setTutorial(2);
+      if (this.tutorial === 2) this.setTutorial(3);
     }
     this.computeRate();
     this.emit('change');
@@ -530,15 +912,34 @@ export class Game {
   }
 
   promote(w) {
-    const next = WORKERS[w.tier.index + 1];
-    if (!next || w.building.level < next.unlock) return;
-    if (!this.spend(this.promotePrice(w))) return;
-    w.data.tier = next.id;
-    if (next.id === 'robot') w.data.name = ROBOT_NAMES[(Math.random() * ROBOT_NAMES.length) | 0];
+    const pr = this.promotion(w);
+    if (!pr || !pr.ok) return;
+    if (pr.cost > 0 && !this.spend(pr.cost, true)) return;
+    w.data.tier = pr.to.id;
     w.buildChar();
-    this.fx.sparkle(w.char.root.position.clone().add(new THREE.Vector3(0, 2, 0)), next.color, 18);
-    this.fx.float(w.char.root.position.clone().add(new THREE.Vector3(0, 3.2, 0)), `⬆ ${next.name} !`, 'float-info');
+    const p = w.char.root.position.clone();
+    this.fx.sparkle(p.clone().add(new THREE.Vector3(0, 2, 0)), pr.to.color, 18);
+    this.fx.float(p.add(new THREE.Vector3(0, 3.2, 0)), `${icon('up')} ${pr.to.short} !`, 'float-info');
     this.sound.buy();
+    this.computeRate();
+    this.emit('change');
+  }
+
+  fire(w) {
+    const b = w.building;
+    const cost = this.severance(w);
+    if (cost > 0) {
+      if (!this.spend(cost, true)) return;
+    } else if (!w.human) {
+      const refund = this.hirePrice(b, w.data.tier) * 0.2;
+      this.cash += refund;
+    }
+    w.dispose();
+    b.workers.splice(b.workers.indexOf(w), 1);
+    this.workers.splice(this.workers.indexOf(w), 1);
+    b.workers.forEach((x, i) => { x.slot = i; });
+    this.toast(w.human ? `Contrat de ${w.data.name} résilié (délai de congé payé : ${money(cost)})` : `${w.data.name} revendu`, 'userMinus');
+    this.sound.click();
     this.computeRate();
     this.emit('change');
   }
@@ -549,39 +950,73 @@ export class Game {
     if (!this.spend(u.cost)) return;
     this.upgrades.add(id);
     this.sound.buy();
-    this.emit('toast', { text: `${u.icon} ${u.name} débloqué : ${u.desc}`, kind: 'success' });
+    this.toast(`${u.name} : ${u.desc}`, u.icon, 'success');
     this.computeRate();
     this.emit('change');
+  }
+
+  chooseCanton(id) {
+    this.canton = id;
+    this.toast(`Siège inscrit dans le canton de ${CANTON[id].name}`, 'shield', 'success');
+    this.emit('change');
+    this.save();
   }
 
   clickHQ(point) {
     const v = this.clickValue;
     this.earn(v);
+    this.recordSale(v, 'normal');
     this.stats.clicks++;
     const p = point || new THREE.Vector3(0, 6, -2);
     this.fx.coinBurst(p, 4, 0.7);
-    this.fx.float(p.clone().add(new THREE.Vector3(0, 1, 0)), '+' + money(v), 'float-click');
+    this.fx.float(p.clone().add(new THREE.Vector3(0, 1, 0)), `${icon('coin')} +${money(v)}`, 'float-click');
     this.sound.coin();
     this.hqBounce = 0.25;
   }
 
   motivate(w) {
     w.boost = 6;
-    this.fx.float(w.char.root.position.clone().add(new THREE.Vector3(0, 3.4, 0)), '⚡ Motivé !', 'float-boost');
+    const p = w.char.root.position.clone().add(new THREE.Vector3(0, 3.4, 0));
+    this.fx.float(p, `${icon('bolt')} Motivé·e !`, 'float-boost');
     this.fx.sparkle(w.char.root.position.clone().add(new THREE.Vector3(0, 1.5, 0)), '#74c0fc', 10);
     this.sound.whoosh();
   }
 
+  recordSale(amount, tvaType) {
+    if (this.tvaRegistered) {
+      const r = tvaType === 'reduit' ? LAW.tvaReduit : LAW.tvaNormal;
+      const tva = (amount * r) / (1 + r);
+      this.week.tva += tva;
+      this.week.sales += amount - tva;
+    } else {
+      this.week.sales += amount;
+    }
+    if (!this.tvaRegistered && this.totalEarned >= LAW.tvaSeuil) {
+      this.tvaRegistered = true;
+      this.cash -= LAW.rcFee;
+      this.week.fees += LAW.rcFee;
+      this.toast(`CA > ${money(LAW.tvaSeuil)} : assujetti à la TVA et inscrit au registre du commerce (${money(LAW.rcFee)})`, 'scale', 'gold');
+    }
+  }
+
   deposit(w) {
-    const amount = w.carry * (this.rush > 0 ? 2 : 1);
-    this.earn(amount);
+    const gross = w.carry * (this.rush > 0 ? 2 : 1);
+    this.earn(gross);
+    this.recordSale(gross, w.building.biz.tva);
+    let net = gross;
+    if (!w.human) {
+      const upkeep = gross * ROBOT_UPKEEP;
+      this.cash -= upkeep;
+      this.week.robots += upkeep;
+      net -= upkeep;
+    }
     this.stats.deposits++;
     const p = w.char.root.position.clone().add(new THREE.Vector3(0, 2.2, -0.6));
     this.fx.coinBurst(p, this.workers.length > 40 ? 2 : 5, 0.8);
-    this.fx.float(p.clone().add(new THREE.Vector3(0, 1.2, 0)), '+' + money(amount), this.rush > 0 ? 'float-rush' : 'float-money');
+    this.fx.float(p.clone().add(new THREE.Vector3(0, 1.2, 0)), `${icon('coin')} +${money(net)}`, this.rush > 0 ? 'float-rush' : 'float-money');
     this.sound.coin();
     this.hqBounce = 0.15;
-    if (this.tutorial === 2) this.setTutorial(3);
+    if (this.tutorial === 3) this.setTutorial(4);
   }
 
   setTutorial(step) {
@@ -610,7 +1045,7 @@ export class Game {
     const hit = new THREE.Mesh(new THREE.BoxGeometry(12, 14, 13).translate(0, 7, -0.5), new THREE.MeshBasicMaterial({ visible: false }));
     hit.userData = { type: 'hq' };
     group.add(hit);
-    this.hqSign = buildSign('SIÈGE', 'Empire Inc.', '#f2c14e', '🏦');
+    this.hqSign = buildSign('SIÈGE', 'Empire SA', '#f2c14e', 'bank');
     this.hqSign.position.set(-5.2, 0, 5.6);
     this.hqSign.rotation.y = 0.35;
     this.hqSign.scale.setScalar(0.7);
@@ -660,27 +1095,26 @@ export class Game {
   }
 
   spawnGolden() {
-    const z = ROADS_Z[(Math.random() * ROADS_Z.length) | 0];
-    const x = (Math.random() - 0.5) * 80;
     const useX = Math.random() < 0.5;
     const pos = useX
       ? new THREE.Vector3(ROADS_X[(Math.random() * ROADS_X.length) | 0], 0.2, (Math.random() - 0.5) * 80)
-      : new THREE.Vector3(x, 0.2, z);
+      : new THREE.Vector3((Math.random() - 0.5) * 80, 0.2, ROADS_Z[(Math.random() * ROADS_Z.length) | 0]);
     this.golden = { life: 20, pos };
     this.goldenObj.root.position.copy(pos);
     this.goldenObj.root.visible = true;
-    this.emit('toast', { text: '💼 Une valise dorée est apparue ! Clique dessus !', kind: 'gold' });
+    this.toast('Une valise dorée est apparue dans les rues ! Clique dessus !', 'briefcase', 'gold');
   }
 
   collectGolden() {
     if (!this.golden) return;
-    const reward = Math.max(60, this.rate * 50 + this.cash * 0.05) * this.goldenMult;
+    const reward = Math.max(60, this.rateCache * 50 + Math.max(0, this.cash) * 0.05) * this.goldenMult;
     this.earn(reward);
+    this.recordSale(reward, 'normal');
     this.stats.golden++;
     const p = this.golden.pos.clone().add(new THREE.Vector3(0, 2, 0));
     this.fx.coinBurst(p, 30, 1.4);
     this.fx.sparkle(p, '#ffe066', 30);
-    this.fx.float(p.clone().add(new THREE.Vector3(0, 2, 0)), '💼 +' + money(reward), 'float-gold');
+    this.fx.float(p.clone().add(new THREE.Vector3(0, 2, 0)), `${icon('briefcase')} +${money(reward)}`, 'float-gold');
     this.sound.golden();
     this.golden = null;
     this.goldenObj.root.visible = false;
@@ -705,7 +1139,7 @@ export class Game {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(9, 9);
     let down = null;
-    el.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, t: performance.now() }; });
+    el.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
     el.addEventListener('pointermove', (e) => {
       this.mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
       this.pointerType = e.pointerType;
@@ -725,11 +1159,10 @@ export class Game {
     this.raycaster.setFromCamera(this.mouse, this.camera);
     const objs = [this.hq];
     for (const p of this.plots.values()) objs.push(p.hit);
-    for (const w of this.workers) objs.push(w.char.hit);
+    for (const w of this.workers) if (w.char.root.visible) objs.push(w.char.hit);
     if (this.golden) objs.push(this.goldenObj.hit);
     const hits = this.raycaster.intersectObjects(objs, true);
     const typed = hits.filter((h) => h.object.userData?.type);
-    // small things first
     const special = typed.find((h) => h.object.userData.type === 'golden') || typed.find((h) => h.object.userData.type === 'worker');
     if (special) return { ...special.object.userData, point: special.point };
     if (typed.length) return { ...typed[0].object.userData, point: typed[0].point };
@@ -737,6 +1170,7 @@ export class Game {
   }
 
   handleClick() {
+    if (!this.canton) return;
     const hit = this.pick();
     if (!hit) { this.select(null); return; }
     this.sound.click();
@@ -758,18 +1192,19 @@ export class Game {
     if (hit) {
       cursor = 'pointer';
       if (hit.type === 'plot') {
-        this.hoverFrame.position.set(hit.plot.center.x, 0, hit.plot.center.z);
-        this.hoverFrame.visible = this.selected !== hit.plot && this.selected !== hit.plot.building;
-        tip = hit.plot.building
-          ? `${hit.plot.building.biz.icon} ${hit.plot.building.biz.name} · Niv. ${hit.plot.building.level}`
-          : '🏗️ Parcelle à vendre — clique pour construire';
+        const pl = hit.plot;
+        this.hoverFrame.position.set(pl.center.x, 0, pl.center.z);
+        this.hoverFrame.visible = this.selected !== pl && this.selected !== pl.building;
+        tip = pl.building
+          ? `${icon(pl.building.typeId)} ${pl.building.biz.name} · ${pl.building.open ? 'Niv. ' + pl.building.level : 'en construction'}`
+          : `${icon('crane')} Parcelle à vendre · ${ZONES[pl.zone].name}`;
       } else if (hit.type === 'worker') {
         const w = hit.worker;
-        tip = `${w.tier.icon} ${w.data.name} (${w.tier.name}) — ${w.statusLabel()} · clic = motiver ⚡`;
+        tip = `${icon(w.tier.icon)} ${w.data.name} (${w.tier.short}) — ${w.statusLabel()} · clic : motiver`;
       } else if (hit.type === 'hq') {
-        tip = `🏦 Siège — clique pour gagner +${money(this.clickValue)}`;
+        tip = `${icon('bank')} Siège — clique pour encaisser +${money(this.clickValue)}`;
       } else if (hit.type === 'golden') {
-        tip = '💼 Valise dorée !';
+        tip = `${icon('briefcase')} Valise dorée !`;
       }
     }
     this.engine.renderer.domElement.style.cursor = cursor;
@@ -778,18 +1213,18 @@ export class Game {
 
   // ---------------- main update ----------------
   update(dt) {
+    if (!this.canton) return;
     this.time += dt;
     this.stats.playTime += dt;
     this.frame++;
     const t = this.time;
-    this.tod = (this.tod + dt / DAY_LENGTH) % 1;
+    this.updateClock(dt);
 
     for (const b of this.buildings.values()) b.update(dt, t);
     for (const w of this.workers) w.update(dt, t);
     const holo = this.cash >= this.cheapestCache;
     for (const p of this.plots.values()) p.update(t, holo && this.isFrontier(p));
 
-    // HQ coin + bounce
     this.hqCoin.rotation.y += dt * 1.6;
     this.hqCoin.position.y = 12.6 + Math.sin(t * 1.5) * 0.3;
     if (this.hqBounce > 0) {
@@ -799,8 +1234,6 @@ export class Game {
     } else {
       this.hq.scale.set(1, 1, 1);
     }
-
-    // frames pulse
     this.selFrame.userData.mat.opacity = 0.65 + Math.sin(t * 5) * 0.3;
 
     // golden briefcase
@@ -821,11 +1254,11 @@ export class Game {
       if (this.nextGolden <= 0) this.spawnGolden();
     }
 
-    // rush hour
+    // rush hour (only when shops are staffed)
     if (this.rush > 0) {
       this.rush -= dt;
       if (this.rush <= 0) this.emit('rush', false);
-    } else if (this.workers.length >= 3) {
+    } else if (this.workers.filter((w) => w.active).length >= 3) {
       this.nextRush -= dt;
       if (this.nextRush <= 0) {
         this.rush = 25;
@@ -843,73 +1276,115 @@ export class Game {
     if (this.frame % 4 === 0) this.updateHover();
   }
 
+  isFrontier(p) {
+    for (let di = -1; di <= 1; di++) {
+      for (let dj = -1; dj <= 1; dj++) {
+        const i = p.i + di, j = p.j + dj;
+        if (i === 0 && j === 0) return true;
+        if (this.buildings.has(`${i},${j}`)) return true;
+      }
+    }
+    return false;
+  }
+
   checkMilestones() {
     const steps = [1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12];
     while (this.milestone < steps.length && this.totalEarned >= steps[this.milestone]) {
-      this.emit('toast', { text: `🏆 Cap franchi : ${money(steps[this.milestone])} gagnés au total !`, kind: 'gold' });
+      this.toast(`Cap franchi : ${money(steps[this.milestone])} de chiffre d'affaires cumulé !`, 'trophy', 'gold');
       this.milestone++;
+    }
+  }
+
+  /** Put every worker where they should be at the current time (after load). */
+  placeWorkersForTime() {
+    for (const w of this.workers) {
+      if (!w.human || this.shouldCommute(w)) {
+        w.startOnSite();
+        if (Math.random() < 0.5) {
+          // spread them along their delivery loop so the city looks alive
+          w.state = Math.random() < 0.5 ? 'toHQ' : 'toWork';
+          w.path = w.building.makePath(w.slot, w.state === 'toHQ');
+          const start = Math.floor(Math.random() * (w.path.length - 1));
+          w.seg = start + 1;
+          w.setPos(w.path[start]);
+          w.char.bag.visible = w.state === 'toHQ';
+          w.carry = w.building.tripIncome(w.tier);
+        }
+      }
     }
   }
 
   // ---------------- persistence ----------------
   serialize() {
     return {
-      v: 1,
+      v: 2,
+      canton: this.canton,
       cash: this.cash,
       totalEarned: this.totalEarned,
       upgrades: [...this.upgrades],
-      tod: this.tod,
+      clock: this.clock,
       stats: this.stats,
       tutorial: this.tutorial,
       milestone: this.milestone,
+      tvaRegistered: this.tvaRegistered,
+      week: this.week,
+      lastWeek: this.lastWeek,
+      pending: this.pending,
       savedAt: Date.now(),
       buildings: [...this.buildings.values()].map((b) => ({
-        key: b.plot.key, type: b.typeId, level: b.level, workers: b.workers.map((w) => ({ ...w.data })),
+        key: b.plot.key,
+        type: b.typeId,
+        level: b.level,
+        construction: b.construction ? b.construction.total - b.construction.t : 0,
+        workers: b.workers.map((w) => ({ ...w.data })),
       })),
     };
   }
 
   save() {
+    if (!this.canton) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(this.serialize())); } catch (e) { /* storage unavailable */ }
   }
 
   load() {
     let data = null;
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { data = null; }
-    if (!data || data.v !== 1) { this.cheapestCache = this.cheapestBuild(); return null; }
+    if (!data || data.v !== 2) { this.cheapestCache = this.cheapestBuild(); return null; }
+    this.canton = data.canton;
     this.cash = data.cash;
     this.totalEarned = data.totalEarned;
     this.upgrades = new Set(data.upgrades);
-    this.tod = data.tod ?? 0.3;
+    this.clock = data.clock ?? this.clock;
     this.stats = { ...this.stats, ...data.stats };
-    this.tutorial = data.tutorial ?? 4;
+    this.tutorial = data.tutorial ?? 5;
     this.milestone = data.milestone ?? 0;
+    this.tvaRegistered = !!data.tvaRegistered;
+    this.week = data.week || emptyLedger();
+    this.lastWeek = data.lastWeek || null;
+    this.pending = data.pending || { wages: 0, charges: 0 };
     for (const bd of data.buildings) {
       const plot = this.plots.get(bd.key);
       if (!plot || !BIZ[bd.type]) continue;
-      const b = this.build(plot, bd.type, true);
-      b.level = bd.level;
-      b.rebuild(false);
+      const b = new Building(this, plot, bd.type, bd.level, bd.construction || 0);
+      this.buildings.set(plot.key, b);
       for (const wd of bd.workers) this.hire(b, wd.tier, true, wd);
-      // spread workers along their loop so the city looks alive at once
-      for (const w of b.workers) {
-        if (Math.random() < 0.55) {
-          w.state = Math.random() < 0.5 ? 'toHQ' : 'toWork';
-          w.path = b.makePath(w.slot, w.state === 'toHQ');
-          const start = Math.floor(Math.random() * (w.path.length - 1));
-          w.seg = start + 1;
-          w.char.root.position.copy(w.path[start]);
-          w.char.bag.visible = w.state === 'toHQ';
-          w.carry = b.tripIncome(w.tier);
-        }
-      }
     }
+    this.placeWorkersForTime();
     const rate = this.computeRate();
     this.cheapestCache = this.cheapestBuild();
+    // Offline: humans only work ~30% of the week (LTr), robots ~100%; net of wages & taxes.
     const elapsed = Math.max(0, (Date.now() - (data.savedAt || Date.now())) / 1000);
     let offline = 0;
     if (elapsed > 30 && rate > 0) {
-      offline = rate * Math.min(elapsed, 4 * 3600) * 0.5;
+      let human = 0, robot = 0;
+      for (const b of this.buildings.values()) {
+        for (const w of b.workers) {
+          const cycle = w.workTime() + (2 * b.routeLength + 10) / (w.tier.speed * this.speedMult) + 0.7;
+          const r = b.tripIncome(w.tier) / cycle;
+          if (w.human) human += r * 0.3 * 0.6; else robot += r * (1 - ROBOT_UPKEEP);
+        }
+      }
+      offline = (human + robot) * (1 - this.cantonData.tax) * Math.min(elapsed, 4 * 3600) * 0.5;
       this.earn(offline);
     }
     this.emit('change');
@@ -923,4 +1398,4 @@ export class Game {
   }
 }
 
-export { TIER };
+export { TIER, DAYS };

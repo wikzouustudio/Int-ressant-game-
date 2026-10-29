@@ -80,7 +80,7 @@ export function createCharacter(look) {
 
     // hair
     const hs = look.hairStyle;
-    if (hs !== 'bald' && look.tier !== 'intern') {
+    if (hs !== 'bald' && look.tier !== 'apprentice') {
       b.sphere(0.49, look.hair, { y: 2.24, z: -0.03, rx: -0.45 }, 20, 12, Math.PI * 0.52);
       if (hs === 'long') b.rbox(0.86, 0.75, 0.3, 0.12, look.hair, { y: 1.72, z: -0.26 });
       if (hs === 'bun') b.sphere(0.2, look.hair, { y: 2.74, z: -0.22 });
@@ -89,11 +89,11 @@ export function createCharacter(look) {
           b.cone(0.12, 0.3, look.hair, { x: -0.28 + i * 0.14, y: 2.58, z: -0.05, rx: -0.4 }, 5);
         }
       }
-    } else if (hs === 'long' && look.tier === 'intern') {
+    } else if (hs === 'long' && look.tier === 'apprentice') {
       b.rbox(0.82, 0.6, 0.28, 0.12, look.hair, { y: 1.8, z: -0.27 });
     }
 
-    if (look.tier === 'intern') {
+    if (look.tier === 'apprentice') {
       // company cap
       b.sphere(0.5, shade(look.shirt, 0.8), { y: 2.26, rx: -0.25 }, 20, 10, Math.PI * 0.48);
       b.box(0.62, 0.05, 0.42, shade(look.shirt, 0.7), { y: 2.42, z: 0.42, rx: -0.12 });
@@ -170,6 +170,27 @@ export function createCharacter(look) {
   bag.visible = false;
   armR.add(bag);
 
+  // ---------- props ----------
+  const cupB = new MeshBuilder();
+  cupB.cyl(0.11, 0.09, 0.22, '#ffffff', { y: -0.86, z: 0.12, mat: 'soft' }, 10);
+  cupB.cyl(0.095, 0.095, 0.02, '#6b3f1f', { y: -0.65, z: 0.12 }, 10);
+  const cup = cupB.build({ castShadow: false });
+  cup.visible = false;
+  armL.add(cup);
+
+  const phoneB = new MeshBuilder();
+  phoneB.rbox(0.1, 0.32, 0.04, 0.02, '#111827', { y: -0.9, z: 0.1, mat: 'soft' });
+  phoneB.box(0.08, 0.26, 0.01, '#60a5fa', { y: -0.87, z: 0.125, mat: 'neon' });
+  const phone = phoneB.build({ castShadow: false });
+  phone.visible = false;
+  armR.add(phone);
+
+  const clothB = new MeshBuilder();
+  clothB.box(0.3, 0.04, 0.24, '#60a5fa', { y: -0.84, z: 0.08 });
+  const cloth = clothB.build({ castShadow: false });
+  cloth.visible = false;
+  armR.add(cloth);
+
   // Invisible hit volume for picking
   const hit = new THREE.Mesh(
     new THREE.BoxGeometry(1.5, 3, 1.5).translate(0, 1.5, 0),
@@ -178,60 +199,137 @@ export function createCharacter(look) {
   hit.material.userData.owned = true;
   root.add(hit);
 
-  return { root, pivot, body, armL, armR, legL, legR, bag, hit };
+  return { root, pivot, body, armL, armR, legL, legR, bag, cup, phone, cloth, hit };
 }
 
+const still = (c) => {
+  c.legL.rotation.x *= 0.7;
+  c.legR.rotation.x *= 0.7;
+  c.pivot.rotation.z = 0;
+};
+
 /**
- * Pose a character. mode: 'walk' | 'work' | 'idle' | 'cheer' | 'carry'
+ * Pose a character.
+ * mode: walk | carry | hammer | type | serve | inspect | push | wipe | phone | coffee | cheer | idle
  */
-export function animateCharacter(c, mode, t, phase, workStyle = 0) {
+export function animateCharacter(c, mode, t, phase) {
   const s = Math.sin(phase);
   let bob = 0;
-  if (mode === 'walk' || mode === 'carry') {
-    c.legL.rotation.x = s * 0.75;
-    c.legR.rotation.x = -s * 0.75;
-    c.armL.rotation.x = -s * 0.65;
-    c.armR.rotation.x = mode === 'carry' ? -0.45 + s * 0.12 : s * 0.65;
-    c.armL.rotation.z = -0.06;
-    c.armR.rotation.z = 0.06;
-    bob = Math.abs(Math.cos(phase)) * 0.12;
-    c.pivot.rotation.x = 0.08;
-    c.pivot.rotation.z = s * 0.03;
-  } else if (mode === 'work') {
-    c.legL.rotation.x = 0;
-    c.legR.rotation.x = 0;
-    c.pivot.rotation.z = 0;
-    if (workStyle === 0) {
-      // hammering / mixing
+  c.cup.visible = mode === 'coffee';
+  c.phone.visible = mode === 'phone';
+  c.cloth.visible = mode === 'wipe';
+  c.armL.rotation.y = 0;
+  c.armR.rotation.y = 0;
+  switch (mode) {
+    case 'walk':
+    case 'carry':
+      c.legL.rotation.x = s * 0.75;
+      c.legR.rotation.x = -s * 0.75;
+      c.armL.rotation.x = -s * 0.65;
+      c.armR.rotation.x = mode === 'carry' ? -0.45 + s * 0.12 : s * 0.65;
+      c.armL.rotation.z = -0.06;
+      c.armR.rotation.z = 0.06;
+      bob = Math.abs(Math.cos(phase)) * 0.12;
+      c.pivot.rotation.x = 0.08;
+      c.pivot.rotation.z = s * 0.03;
+      break;
+    case 'hammer':
+      still(c);
       c.armR.rotation.x = -1.5 + Math.sin(t * 11) * 0.55;
       c.armL.rotation.x = -0.9 + Math.sin(t * 11 + 1.5) * 0.2;
-    } else {
-      // typing / handling
+      c.armL.rotation.z = -0.1;
+      c.armR.rotation.z = 0.1;
+      c.pivot.rotation.x = 0.12 + Math.sin(t * 5.5) * 0.03;
+      bob = Math.abs(Math.sin(t * 5.5)) * 0.04;
+      break;
+    case 'type':
+      still(c);
       c.armR.rotation.x = -1.1 + Math.sin(t * 16) * 0.15;
       c.armL.rotation.x = -1.1 + Math.sin(t * 16 + 2) * 0.15;
+      c.armL.rotation.z = -0.1;
+      c.armR.rotation.z = 0.1;
+      c.pivot.rotation.x = 0.1;
+      break;
+    case 'serve': {
+      still(c);
+      const k = (Math.sin(t * 2.2) + 1) / 2; // hand out goods, take money
+      c.armR.rotation.x = -1.35 - k * 0.25;
+      c.armL.rotation.x = -0.4 - (1 - k) * 0.9;
+      c.armL.rotation.z = -0.15;
+      c.armR.rotation.z = 0.05;
+      c.pivot.rotation.x = 0.06 + k * 0.06;
+      bob = Math.sin(t * 4.4) * 0.02;
+      break;
     }
-    c.armL.rotation.z = -0.1;
-    c.armR.rotation.z = 0.1;
-    c.pivot.rotation.x = 0.12 + Math.sin(t * 5.5) * 0.03;
-    bob = Math.abs(Math.sin(t * 5.5)) * 0.04;
-  } else if (mode === 'cheer') {
-    c.armL.rotation.x = -2.8;
-    c.armR.rotation.x = -2.8;
-    c.armL.rotation.z = -0.35 + Math.sin(t * 18) * 0.15;
-    c.armR.rotation.z = 0.35 - Math.sin(t * 18) * 0.15;
-    c.legL.rotation.x = 0;
-    c.legR.rotation.x = 0;
-    c.pivot.rotation.x = -0.05;
-    bob = Math.abs(Math.sin(t * 12)) * 0.35;
-  } else {
-    c.legL.rotation.x *= 0.8;
-    c.legR.rotation.x *= 0.8;
-    c.armL.rotation.x = Math.sin(t * 2) * 0.05;
-    c.armR.rotation.x = -Math.sin(t * 2) * 0.05;
-    c.armL.rotation.z = -0.08;
-    c.armR.rotation.z = 0.08;
-    c.pivot.rotation.x = 0;
-    bob = Math.sin(t * 2.4) * 0.02;
+    case 'inspect':
+      still(c);
+      c.armR.rotation.x = -2.0;
+      c.armR.rotation.z = -0.55;
+      c.armL.rotation.x = -0.5 + Math.sin(t * 1.5) * 0.15;
+      c.armL.rotation.z = -0.5;
+      c.pivot.rotation.x = 0.2 + Math.sin(t * 1.2) * 0.08;
+      c.pivot.rotation.z = Math.sin(t * 0.8) * 0.06;
+      break;
+    case 'push':
+      c.legL.rotation.x = Math.sin(t * 6) * 0.35 - 0.2;
+      c.legR.rotation.x = -Math.sin(t * 6) * 0.35 + 0.3;
+      c.armL.rotation.x = -1.25 + Math.sin(t * 6) * 0.1;
+      c.armR.rotation.x = -1.25 + Math.sin(t * 6) * 0.1;
+      c.armL.rotation.z = 0.05;
+      c.armR.rotation.z = -0.05;
+      c.pivot.rotation.x = 0.35;
+      c.pivot.rotation.z = 0;
+      bob = Math.abs(Math.sin(t * 6)) * 0.05;
+      break;
+    case 'wipe':
+      still(c);
+      c.armR.rotation.x = -1.2;
+      c.armR.rotation.y = Math.sin(t * 7) * 0.6;
+      c.armR.rotation.z = 0.2 + Math.sin(t * 7) * 0.2;
+      c.armL.rotation.x = -0.3;
+      c.armL.rotation.z = -0.15;
+      c.pivot.rotation.x = 0.28;
+      break;
+    case 'phone':
+      still(c);
+      c.armR.rotation.x = -2.5;
+      c.armR.rotation.z = -0.9;
+      c.armL.rotation.x = -0.2 + Math.sin(t * 2.5) * 0.4;
+      c.armL.rotation.z = -0.4 - Math.max(0, Math.sin(t * 2.5)) * 0.4;
+      c.pivot.rotation.x = 0;
+      c.pivot.rotation.z = Math.sin(t * 0.9) * 0.05;
+      bob = Math.sin(t * 2) * 0.02;
+      break;
+    case 'coffee': {
+      still(c);
+      const sip = Math.max(0, Math.sin(t * 0.9)) ** 3;
+      c.armL.rotation.x = -1.2 - sip * 1.1;
+      c.armL.rotation.z = 0.25 + sip * 0.35;
+      c.armR.rotation.x = 0.05;
+      c.armR.rotation.z = 0.12;
+      c.pivot.rotation.x = -sip * 0.08;
+      bob = Math.sin(t * 2.4) * 0.02;
+      break;
+    }
+    case 'cheer':
+      c.armL.rotation.x = -2.8;
+      c.armR.rotation.x = -2.8;
+      c.armL.rotation.z = -0.35 + Math.sin(t * 18) * 0.15;
+      c.armR.rotation.z = 0.35 - Math.sin(t * 18) * 0.15;
+      c.legL.rotation.x = 0;
+      c.legR.rotation.x = 0;
+      c.pivot.rotation.x = -0.05;
+      c.pivot.rotation.z = 0;
+      bob = Math.abs(Math.sin(t * 12)) * 0.35;
+      break;
+    default:
+      still(c);
+      c.armL.rotation.x = Math.sin(t * 2) * 0.05;
+      c.armR.rotation.x = -Math.sin(t * 2) * 0.05;
+      c.armL.rotation.z = -0.08;
+      c.armR.rotation.z = 0.08;
+      c.pivot.rotation.x = 0;
+      bob = Math.sin(t * 2.4) * 0.02;
   }
   c.pivot.position.y = bob;
 }
