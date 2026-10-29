@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prisme OS</title>
+  <meta name="description" content="Prisme OS — un système d'exploitation web moderne, fluide et original.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/os.css">
+  <link rel="stylesheet" href="css/apps.css">
+</head>
+<body>
+  <canvas id="wallpaper"></canvas>
+  <div id="grain"></div>
+
+  <!-- Écran de démarrage -->
+  <div id="boot">
+    <div class="boot-logo"></div>
+    <div class="boot-name">Prisme<span>OS</span></div>
+    <div class="boot-bar"><i></i></div>
+    <div class="boot-msg">Initialisation du noyau…</div>
+  </div>
+
+  <!-- Écran de verrouillage -->
+  <div id="lock" class="hidden">
+    <div class="lock-time"></div>
+    <div class="lock-date"></div>
+    <div class="lock-user">
+      <div class="avatar"></div>
+      <div class="lock-name"></div>
+      <button class="lock-btn">Déverrouiller <span>↵</span></button>
+    </div>
+    <div class="lock-hint">Appuyez sur une touche ou cliquez pour déverrouiller</div>
+  </div>
+
+  <!-- Bureau -->
+  <div id="desktop" class="hidden">
+    <header id="topbar">
+      <div class="tb-left">
+        <button class="tb-logo" id="tb-logo" title="Menu Prisme"></button>
+        <span class="tb-app" id="tb-app">Bureau</span>
+        <div class="tb-menu" id="tb-menu"></div>
+      </div>
+      <div class="tb-center" id="tb-workspaces"></div>
+      <div class="tb-right">
+        <button class="tb-ico" id="tb-search" title="Recherche (Ctrl+Espace)"></button>
+        <div class="tb-tray" id="tb-tray"></div>
+        <button class="tb-clock" id="tb-clock"></button>
+        <button class="tb-ico" id="tb-cc" title="Centre de contrôle"></button>
+      </div>
+    </header>
+
+    <div id="icons"></div>
+    <div id="widgets"></div>
+    <div id="windows"></div>
+    <div id="snap-preview"></div>
+
+    <nav id="dock"><div class="dock-inner" id="dock-inner"></div></nav>
+  </div>
+
+  <div id="launcher" class="hidden">
+    <div class="launcher-box">
+      <div class="launcher-input"><span class="li-ico"></span><input id="launcher-input" placeholder="Rechercher des apps, fichiers, calculs, commandes…" autocomplete="off" spellcheck="false"><kbd>Échap</kbd></div>
+      <div class="launcher-results" id="launcher-results"></div>
+    </div>
+  </div>
+
+  <div id="cc" class="panel hidden"></div>
+  <div id="calendar" class="panel hidden"></div>
+  <div id="ctxmenu" class="hidden"></div>
+  <div id="toasts"></div>
+
+  <script src="js/core.js"></script>
+  <script src="js/icons.js"></script>
+  <script src="js/fs.js"></script>
+  <script src="js/wallpaper.js"></script>
+  <script src="js/wm.js"></script>
+  <script src="js/apps/terminal.js"></script>
+  <script src="js/apps/files.js"></script>
+  <script src="js/apps/notes.js"></script>
+  <script src="js/apps/calculator.js"></script>
+  <script src="js/apps/studio.js"></script>
+  <script src="js/apps/synth.js"></script>
+  <script src="js/apps/monitor.js"></script>
+  <script src="js/apps/snake.js"></script>
+  <script src="js/apps/settings.js"></script>
+  <script src="js/apps/iris.js"></script>
+  <script src="js/shell.js"></script>
+</body>
+</html>
