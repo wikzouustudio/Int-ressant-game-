@@ -1,6 +1,6 @@
 import {
   BUSINESSES, BIZ, WORKERS, UPGRADES, MAX_LEVEL, LAW, CANTONS, CANTON, ZONES, ROBOT_UPKEEP, DAYS, DAYS_LONG,
-  levelMult, slotsFor, money, fmt, pct, buildTime,
+  levelMult, slotsFor, money, fmt, pct, buildTime, demolishTime,
 } from '../game/config.js';
 import { icon } from './icons.js';
 import { TIERS } from '../engine/quality.js';
@@ -9,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 const sumCharges = (c) => c.avs + c.ac + c.lpp + c.laa + c.af;
 
 const TUTORIAL = [
-  `Clique sur une <b>parcelle libre</b> (le ${icon('plus', 'inline')} vert) en <b>zone mixte</b> pour construire ton premier <b>Stand de limonade</b>.`,
+  `Achète le <b>terrain vide</b> à côté du Siège (le ${icon('plus', 'inline')} vert), puis construis ton premier <b>Stand de limonade</b>. Les <b>bâtiments abandonnés</b> se rachètent et se démolissent.`,
   `Ton permis est <b>mis à l'enquête publique</b> (gabarits), puis le chantier démarre. Le stand ouvre dans quelques secondes…`,
   `Ouvert ! <b>Engage un·e apprenti·e CFC</b> dans le panneau à droite. Il/elle travaille <b>lun–ven, 8h–17h</b> (Loi sur le travail).`,
   `Ton apprenti·e enchaîne ses tâches puis <b>rapporte la recette au Siège</b>. Clique aussi sur le Siège pour encaisser !`,
@@ -107,9 +107,53 @@ export class UI {
     </div>`;
   }
 
+  plotSteps(plot) {
+    const st = [
+      ['contract', 'Acheter', plot.owned],
+      ['crane', 'Démolir', plot.owned && !plot.ruin],
+      ['building', 'Construire', !!plot.building],
+    ];
+    return `<div class="build-steps three">${st.map(([ic, l, done], k) => {
+      const cur = !done && (k === 0 || st[k - 1][2]);
+      return `<div class="step ${done ? 'on' : ''} ${cur ? 'cur on' : ''}">${icon(done ? 'check' : ic)}<span>${l}</span></div>`;
+    }).join('')}</div>`;
+  }
+
   renderPlot(plot) {
     const g = this.game;
     const zone = ZONES[plot.zone];
+    if (!plot.owned) {
+      const tax = g.transferTax(plot);
+      const title = plot.ruin ? 'Bâtiment abandonné' : 'Terrain à vendre';
+      return this.head(plot.ruin ? 'warning' : 'pin', plot.ruin ? 'linear-gradient(135deg,#a8a29e,#57534e)' : 'linear-gradient(135deg,#3ddc84,#16a34a)', title, `${zone.name} · Bloc ${plot.i}, ${plot.j}`) +
+        `<div class="panel-body">
+          ${this.plotSteps(plot)}
+          <div class="kv">
+            <div><span>${icon('pin', 'inline')} Prix du terrain</span><b>${money(plot.price)}</b></div>
+            <div><span>${icon('percent', 'inline')} Droits de mutation (≈3 %)</span><b>${money(tax)}</b></div>
+            ${plot.ruin ? `<div><span>${icon('crane', 'inline')} Démolition ensuite</span><b>${money(g.demolitionPrice(plot))}</b></div>` : ''}
+          </div>
+          <button class="btn gold big" data-action="buy" data-cost="${plot.price + tax}"><span class="l">${icon('contract')}<span>Acheter${plot.ruin ? ' le bâtiment' : ' le terrain'}<small>Inscription au registre foncier</small></span></span><span class="price">${money(plot.price + tax)}</span></button>
+          <div class="law-note">${icon('info', 'inline')} ${plot.ruin ? 'Ce bâtiment est à l\'abandon : achète-le, obtiens un <b>permis de démolir</b>, casse-le puis construis ton commerce à la place.' : 'Terrain constructible : achète-le puis dépose un permis de construire.'}</div>
+        </div>`;
+    }
+    if (plot.ruin) {
+      const d = plot.demolish;
+      if (d) {
+        const k = Math.min(1, d.t / d.total);
+        return this.head('crane', 'linear-gradient(135deg,#ffc93c,#f08c00)', 'Démolition en cours', `${zone.name} · Bloc ${plot.i}, ${plot.j}`) +
+          `<div class="panel-body">${this.plotSteps(plot)}
+            <div class="big-progress"><i id="demo-progress" style="width:${k * 100}%"></i></div>
+            <p class="muted" id="demo-left">Terrain dégagé dans ${Math.ceil(d.total - d.t)} s</p>
+            <div class="tip-card">${icon('pointer')}<div><b>Clique sur le bâtiment</b> pour aider la pelleteuse à le casser plus vite !</div></div>
+          </div>`;
+      }
+      return this.head('warning', 'linear-gradient(135deg,#a8a29e,#57534e)', 'Ton bâtiment abandonné', `${zone.name} · Bloc ${plot.i}, ${plot.j}`) +
+        `<div class="panel-body">${this.plotSteps(plot)}
+          <button class="btn red big" data-action="demolish" data-cost="${g.demolitionPrice(plot)}"><span class="l">${icon('crane')}<span>Démolir<small>Permis de démolir + évacuation des déchets</small></span></span><span class="price">${money(g.demolitionPrice(plot))}</span></button>
+          <div class="law-note">${icon('scale', 'inline')} La démolition nécessite un <b>permis de démolir</b> et le tri des déchets de chantier (OLED). Durée : ${demolishTime(plot.i, plot.j).toFixed(0)} s.</div>
+        </div>`;
+    }
     const items = BUSINESSES.map((b) => {
       const biz = BIZ[b.id];
       const unlocked = g.isUnlocked(biz);
@@ -277,7 +321,9 @@ export class UI {
     const a = btn.dataset.action;
     const t = this.current;
     if (a === 'close') { g.select(null); return; }
-    if (a === 'build') {
+    if (a === 'buy') g.buyPlot(t);
+    else if (a === 'demolish') g.startDemolition(t);
+    else if (a === 'build') {
       const b = g.build(t, btn.dataset.type);
       if (b) this.open(b);
     } else if (a === 'hire') g.hire(t, btn.dataset.tier);
@@ -557,6 +603,13 @@ export class UI {
         const br = document.getElementById('b-rate');
         if (br) br.textContent = money(t.estimatedRate(true) * (g.rush > 0 ? 2 : 1)) + '/s';
       }
+    }
+    if (t && t.demolish) {
+      const d = t.demolish;
+      const bar = document.getElementById('demo-progress');
+      const left = document.getElementById('demo-left');
+      if (bar) bar.style.width = Math.min(100, (d.t / d.total) * 100) + '%';
+      if (left) left.textContent = `Terrain dégagé dans ${Math.max(0, Math.ceil(d.total - d.t))} s`;
     }
     if (t && t.hq) {
       const r = document.getElementById('hq-rate');

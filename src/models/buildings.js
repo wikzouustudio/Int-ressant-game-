@@ -942,3 +942,103 @@ export function buildConstructionSite(color) {
 }
 
 export { bush };
+
+// ---------------------------------------------------------------------------
+// Abandoned buildings (bought, demolished, then rebuilt by the player)
+// ---------------------------------------------------------------------------
+const FADED = ['#b8ab98', '#a9a39a', '#b5a28c', '#9fa7a8', '#b9a7a0', '#a7a08b'];
+
+function boarded(b, x, y, z, w, h, ry = 0) {
+  b.group({ x, y, z, ry }, () => {
+    b.box(w, h, 0.08, '#2b2622', { sharp: true });
+    b.box(w + 0.3, 0.22, 0.1, '#9c7a52', { y: h * 0.25, z: 0.06, rz: 0.12, r: 0.04 });
+    b.box(w + 0.3, 0.22, 0.1, '#8a6a46', { y: h * 0.62, z: 0.08, rz: -0.18, r: 0.04 });
+    b.box(w + 0.2, 0.2, 0.1, '#a5835a', { y: h * 0.85, z: 0.1, rz: 0.05, r: 0.04 });
+  });
+}
+
+function ruinModel(b, seed) {
+  const r = rng(seed);
+  const wall = FADED[(r() * FADED.length) | 0];
+  const kind = ['house', 'warehouse', 'shop'][(r() * 3) | 0];
+  // weeds and cracked concrete
+  for (let k = 0; k < 10; k++) b.blob(0.25 + r() * 0.35, r() > 0.5 ? '#7a9a3a' : '#8aa648', { x: -5.5 + r() * 11, y: 0.1, z: -5 + r() * 10, sy: 0.6 }, 1);
+  if (kind === 'warehouse') {
+    b.box(10.4, 4.6, 8, wall, { z: -1.6, r: 0.12 });
+    for (let x = -4.8; x <= 4.8; x += 0.6) b.box(0.05, 4.2, 0.04, shade(wall, 0.82), { x, y: 0.2, z: 2.41, sharp: true });
+    rollDoor(b, { x: -2, y: 0, z: 2.42, w: 3.4, h: 3.0, color: '#7d7468' });
+    b.box(1.6, 1.2, 0.2, '#22201d', { x: -2.6, y: 1.6, z: 2.5, rz: 0.2, sharp: true });
+    boarded(b, 3, 1.8, 2.42, 1.6, 1.2);
+    // half-collapsed roof
+    b.box(5.6, 0.25, 8.4, '#6d7480', { x: -2.4, y: 4.6, z: -1.6, rz: 0.04, r: 0.06 });
+    b.box(4.4, 0.25, 6.0, '#5f6670', { x: 2.8, y: 3.9, z: -2.4, rz: -0.32, rx: 0.1, r: 0.06 });
+    b.box(1.0, 1.8, 1.0, shade(wall, 0.9), { x: 4.2, y: 4.6, z: -4.6, r: 0.08 });
+  } else if (kind === 'house') {
+    b.box(9, 5.2, 7, wall, { z: -1.8, r: 0.12 });
+    b.box(9.1, 0.4, 7.1, shade(wall, 0.8), { y: 2.6, z: -1.8, sharp: true });
+    boarded(b, -2.6, 0.9, 1.72, 1.6, 1.4);
+    boarded(b, 2.6, 0.9, 1.72, 1.6, 1.4);
+    boarded(b, -2.6, 3.4, 1.72, 1.2, 1.2);
+    b.box(1.2, 1.2, 0.08, '#1f1c19', { x: 2.6, y: 3.4, z: 1.74, sharp: true });
+    b.box(1.4, 2.3, 0.14, '#5d4630', { x: 0, y: 0, z: 1.74, rz: 0.08, r: 0.04 });
+    // roof with holes and missing tiles
+    b.prism(9.6, 2.6, 7.6, '#8a4a3a', { y: 5.2, z: -1.8 });
+    b.box(2.4, 0.2, 1.8, '#1f1c19', { x: 1.8, y: 6.2, z: -0.6, rx: 0.6, sharp: true });
+    b.box(1.8, 0.2, 1.4, '#1f1c19', { x: -2.6, y: 6.0, z: -3.2, rx: -0.6, sharp: true });
+    b.box(0.9, 1.6, 0.9, shade(wall, 0.85), { x: 3, y: 5.6, z: -3.2, rz: 0.15, r: 0.08 });
+  } else {
+    b.box(10, 3.8, 7.4, wall, { z: -1.7, r: 0.12 });
+    b.box(10.2, 0.8, 0.3, '#7d6f62', { y: 2.9, z: 2.0, rz: -0.05, r: 0.1 });
+    b.box(8.4, 2.2, 0.08, '#2a2a2e', { y: 0.4, z: 2.0, sharp: true });
+    for (let k = 0; k < 5; k++) b.box(0.6, 0.5, 0.05, '#cfe6ef', { x: -3.4 + k * 1.7, y: 0.6 + r() * 1.2, z: 2.05, rz: r() * 2, mat: 'glass', sharp: true });
+    boarded(b, 0, 0.4, 2.06, 2.4, 2.2);
+    b.box(10.3, 0.3, 7.7, shade(wall, 0.8), { y: 3.8, z: -1.7, r: 0.1 });
+  }
+  // vines
+  for (let k = 0; k < 6; k++) b.blob(0.35 + r() * 0.3, '#4f7f35', { x: -4.6 + r() * 9.2, y: 0.6 + r() * 3.2, z: 1.9, sz: 0.4 }, 1);
+  // rubble & junk
+  for (let k = 0; k < 6; k++) b.box(0.4 + r() * 0.6, 0.3 + r() * 0.3, 0.4 + r() * 0.5, shade(wall, 0.7 + r() * 0.3), { x: -5 + r() * 10, z: 2.8 + r() * 1.6, ry: r() * 3, rz: r() - 0.5 });
+  barrel(b, { x: 5.0, y: 0, z: 3.2, color: '#7a5a3a', ry: 0.4 });
+  // construction fence with danger sign
+  for (let i = 0; i < 8; i++) b.box(1.3, 1.2, 0.06, i % 2 ? '#c9c3b8' : '#b0a99c', { x: -5.2 + i * 1.4, z: 4.9, ry: (r() - 0.5) * 0.08, sharp: true });
+  b.box(1.4, 0.8, 0.08, '#ffd43b', { x: -3.8, y: 0.3, z: 4.96, r: 0.03 });
+  b.box(0.5, 0.5, 0.04, '#e03131', { x: -3.8, y: 0.45, z: 5.01, ry: 0, rz: Math.PI / 4, sharp: true });
+}
+
+/** Abandoned building: one medium-detail model + shadow proxy. */
+export function buildRuin(seed) {
+  const b = new MeshBuilder({ lod: 1 });
+  ruinModel(b, seed);
+  const group = b.build();
+  group.traverse((m) => { if (m.isMesh) m.castShadow = false; });
+  const lo = new MeshBuilder({ lod: 2 });
+  ruinModel(lo, seed);
+  const low = lo.build();
+  group.add(makeShadowProxy(low));
+  low.traverse((m) => { if (m.isMesh) m.geometry.dispose(); });
+  return group;
+}
+
+/** Cartoon excavator used while demolishing; returns { group, arm }. */
+export function buildExcavator() {
+  const b = new MeshBuilder();
+  b.box(3.0, 0.7, 1.0, '#2e3440', { z: -0.9, r: 0.3 });
+  b.box(3.0, 0.7, 1.0, '#2e3440', { z: 0.9, r: 0.3 });
+  for (const z of [-0.9, 0.9]) for (const x of [-1.0, 0, 1.0]) b.cyl(0.28, 0.28, 1.05, '#5f6875', { x, y: 0.35, z: z - 0.52, rx: Math.PI / 2, mat: 'metal' }, 10);
+  b.box(2.6, 1.2, 2.4, '#ffc93c', { y: 0.7, r: 0.25 });
+  b.box(1.3, 1.3, 1.3, '#ffc93c', { x: -0.4, y: 1.9, z: 0.4, r: 0.2 });
+  b.box(1.1, 0.9, 0.06, '#bfe3ff', { x: -0.4, y: 2.15, z: 1.06, mat: 'glass', sharp: true });
+  b.box(0.9, 0.5, 2.0, '#2e3440', { x: 1.0, y: 1.9, r: 0.15 });
+  const body = b.build();
+  const ab = new MeshBuilder();
+  ab.box(0.45, 0.45, 3.2, '#ffc93c', { z: 1.6, r: 0.15 });
+  ab.group({ y: 0, z: 3.2, rx: 0.9 }, () => {
+    ab.box(0.4, 0.4, 2.4, '#ffc93c', { z: 1.2, r: 0.12 });
+    ab.box(0.9, 0.7, 0.6, '#5f6875', { y: -0.35, z: 2.5, r: 0.12, mat: 'metal' });
+  });
+  const arm = ab.build();
+  arm.position.set(-0.2, 1.7, 0.6);
+  const group = new THREE.Group();
+  group.add(body, arm);
+  return { group, arm };
+}

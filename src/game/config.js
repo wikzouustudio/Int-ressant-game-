@@ -1,5 +1,8 @@
 export const CELL = 18;          // size of a city block
-export const GRID = 2;           // blocks from -GRID..GRID
+export const GRID = 3;           // playable blocks from -GRID..GRID (7×7)
+export const DECOR = 2;          // rings of decorative city blocks around the playable district
+export const PLAY_HALF = (GRID + 0.5) * CELL;
+export const CITY_HALF = (GRID + DECOR + 0.5) * CELL;
 export const PAD = 13;           // buildable pad size
 export const ROAD_Y = 0.2;
 export const PAD_Y = 0.25;
@@ -34,7 +37,20 @@ export const LAW = {
   cfcDays: 10,               // durée simplifiée de l'apprentissage CFC (LFPr)
   schoolDay: 2,              // mercredi : cours à l'école professionnelle (art. 21 LFPr)
   permitRate: 0.02,          // émoluments du permis de construire (LAT / lois cantonales)
+  demolishRate: 0.35,        // démolition + élimination des déchets (OLED), en % du prix du terrain
+  demolishPermit: 0.05,      // émoluments du permis de démolir
 };
+
+// --- Foncier -------------------------------------------------------------------
+export const STARTER_LOTS = ['1,0', '-1,0'];          // terrains vides, bon marché, à côté du Siège
+export const ring = (i, j) => Math.max(Math.abs(i), Math.abs(j));
+/** Prix du terrain : plus cher près du centre-ville… mais les anneaux extérieurs sont plus grands. */
+export const landPrice = (i, j, ruin) => {
+  const base = [0, 15, 900, 45000][ring(i, j)] || 2e6;
+  return base * (ruin ? 0.7 : 1) * (1 + 0.04 * ((i * 7 + j * 13) & 3));
+};
+export const demolishCost = (land) => land * LAW.demolishRate + 8;
+export const demolishTime = (i, j) => 7 + ring(i, j) * 2.5; // seconds
 
 export const CANTONS = [
   { id: 'ZG', name: 'Zoug', tax: 0.1185, af: 0.0135, minWage: 0, wageIdx: 1.06, note: 'Fiscalité la plus douce du pays' },

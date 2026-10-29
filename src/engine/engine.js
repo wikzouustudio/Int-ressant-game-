@@ -5,12 +5,15 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { CITY_HALF } from '../game/config.js';
 
 export function createEngine(container) {
   const mobile = matchMedia('(pointer: coarse)').matches;
   const quality = { high: !mobile };
 
-  const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
+  // Native MSAA on the default framebuffer: nearly free on mobile tile-based GPUs and used
+  // whenever post-processing is off; the composer has its own multisampled target.
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, mobile ? 1.5 : 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
@@ -20,15 +23,15 @@ export function createEngine(container) {
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.5, 3000);
-  camera.position.set(52, 62, 88);
+  const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.8, 3000);
+  camera.position.set(58, 72, 100);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, 6);
   controls.enableDamping = true;
   controls.dampingFactor = 0.08;
   controls.minDistance = 18;
-  controls.maxDistance = 170;
+  controls.maxDistance = 260;
   controls.minPolarAngle = 0.25;
   controls.maxPolarAngle = 1.28;
   controls.screenSpacePanning = false;
@@ -70,8 +73,8 @@ export function createEngine(container) {
   const fwd = new THREE.Vector3();
   const right = new THREE.Vector3();
   const move = new THREE.Vector3();
-  const boundsMin = new THREE.Vector3(-55, 0, -50);
-  const boundsMax = new THREE.Vector3(55, 0, 60);
+  const boundsMin = new THREE.Vector3(-CITY_HALF, 0, -CITY_HALF);
+  const boundsMax = new THREE.Vector3(CITY_HALF, 0, CITY_HALF);
 
   function update(dt) {
     move.set(0, 0, 0);
@@ -103,7 +106,7 @@ export function createEngine(container) {
     renderer.setPixelRatio(dpr);
     composer.setPixelRatio(dpr);
     bloom.enabled = t.bloom;
-    useComposer = t.bloom || t.aa > 0;
+    useComposer = t.bloom;
     for (const target of [composer.renderTarget1, composer.renderTarget2]) {
       if (target.samples !== t.aa) { target.samples = t.aa; target.dispose(); }
     }

@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import {
-  CELL, GRID, PAD, PAD_Y, MAX_LEVEL, SAVE_KEY, BUSINESSES, BIZ, WORKERS, UPGRADES, LAW, CANTON, ZONES,
+  CELL, GRID, PAD, PAD_Y, PLAY_HALF, STARTER_LOTS, landPrice, demolishCost, demolishTime, MAX_LEVEL, SAVE_KEY, BUSINESSES, BIZ, WORKERS, UPGRADES, LAW, CANTON, ZONES,
   ROBOT_UPKEEP, FIRST_NAMES, ROBOT_NAMES, DAYS, levelMult, slotsFor, buildCost, upgradeCost, hireCost,
   trainingCost, buildTime, money,
 } from './config.js';
-import { buildBusiness, buildHQ, buildSign, buildForSale, buildConstructionSite, easeOutBack, setBuildingLodScale } from '../models/buildings.js';
+import { buildBusiness, buildHQ, buildSign, buildForSale, buildConstructionSite, easeOutBack, setBuildingLodScale, buildRuin, buildExcavator } from '../models/buildings.js';
 import { createCharacter, animateCharacter, randomLook } from '../models/character.js';
 import { MeshBuilder, disposeObject } from '../models/builder.js';
 import { Effects } from './fx.js';
 import { Sound } from './audio.js';
 import { CrowdRenderer } from './crowd.js';
-import { ROADS_Z, ROADS_X } from '../world/environment.js';
+import { Citizens } from './citizens.js';
+import { PLAY_ROADS } from '../world/environment.js';
 import { icon } from '../ui/icons.js';
 
 const TIER = Object.fromEntries(WORKERS.map((w, i) => [w.id, { ...w, index: i }]));
@@ -18,7 +19,7 @@ const WALK_Y = 0.23;
 const HQ_ROAD_Z = CELL / 2;
 const HQ_DEPOSIT_Z = 5.4;
 const LANE_Z = 5.6;        // local z of the walkway lane in front of a building
-const EDGE_X = 47.5;       // where commuters enter / leave the city
+const EDGE_X = PLAY_HALF + CELL / 2; // where commuters enter / leave the district
 const SPEED_OPEN = 3;      // game minutes per real second while the city works
 const SPEED_CLOSED = 30;   // nights & week-ends fly by
 const _v = new THREE.Vector3();
@@ -85,19 +86,42 @@ class Plot {
     this.hit.userData = { type: 'plot', plot: this };
     this.group.add(this.hit);
     this.building = null;
+    this.owned = false;
+    this.ruin = null;
+    this.demolish = null;
+    // Most lots start with an abandoned building; a few (and the starter lots) are vacant.
+    const vacant = STARTER_LOTS.includes(this.key) || ((i * 31 + j * 17 + 40) % 5 === 0);
+    if (!vacant) this.addRuin();
     this.setOccupied(false);
     game.scene.add(this.group);
   }
 
-  setOccupied(on) {
-    this.grass.visible = !on;
-    this.concrete.visible = on;
-    this.forSale.visible = !on;
-    this.holo.visible = !on;
+  get price() { return landPrice(this.i, this.j, !!this.ruin); }
+
+  addRuin() {
+    this.ruin = buildRuin((this.i + 20) * 101 + (this.j + 20) * 7);
+    this.ruin.position.y = PAD_Y;
+    this.group.add(this.ruin);
   }
 
-  update(t, showHolo) {
-    if (this.building) return;
+  removeRuin() {
+    if (!this.ruin) return;
+    this.group.remove(this.ruin);
+    disposeObject(this.ruin);
+    this.ruin = null;
+  }
+
+  setOccupied(on) {
+    const lot = !on && !this.ruin;
+    this.grass.visible = lot;
+    this.concrete.visible = !lot;
+    this.forSale.visible = !on && !this.owned;
+    this.holo.visible = false;
+  }
+
+  update(t, dt, showHolo) {
+    if (this.demolish) this.updateDemolition(t, dt);
+    if (this.building || this.ruin) { this.holo.visible = false; return; }
     this.holo.visible = showHolo;
     if (showHolo) {
       this.holo.rotation.y = t * 1.2 + this.i;
@@ -107,6 +131,42 @@ class Plot {
     }
   }
 }
+
+Plot.prototype.startDemolition = function startDemolition() {
+  const exc = buildExcavator();
+  exc.group.position.set(3.2, PAD_Y, 5.2);
+  exc.group.rotation.y = Math.PI * 0.85;
+  this.group.add(exc.group);
+  this.demolish = { t: 0, total: demolishTime(this.i, this.j), exc, puff: 0 };
+};
+
+/** Each click on a ruin being demolished knocks a chunk off (speeds the job up). */
+Plot.prototype.smash = function smash() {
+  if (!this.demolish) return;
+  this.demolish.t += 0.6;
+  this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 8, 1.5 + Math.random() * 3, this.center.z + (Math.random() - 0.5) * 6), { color: '#bfb3a0', size: 1.2, life: 1.2, up: 1.5, spread: 2, radial: 4, count: 6 });
+  this.game.sound.whoosh();
+};
+
+Plot.prototype.updateDemolition = function updateDemolition(t, dt) {
+  const d = this.demolish;
+  d.t += dt;
+  const k = Math.min(1, d.t / d.total);
+  if (this.ruin) {
+    // crumble: the ruin shakes and sinks into its own rubble
+    this.ruin.scale.y = Math.max(0.08, 1 - k * 0.92);
+    this.ruin.position.x = (Math.random() - 0.5) * 0.12 * (1 - k);
+    this.ruin.position.z = (Math.random() - 0.5) * 0.12 * (1 - k);
+  }
+  d.exc.arm.rotation.x = -0.35 + Math.sin(t * 3) * 0.35;
+  d.exc.arm.rotation.y = Math.sin(t * 0.9) * 0.4;
+  d.puff -= dt;
+  if (d.puff <= 0) {
+    d.puff = 0.15;
+    this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 9, 0.6 + Math.random() * 2, this.center.z + (Math.random() - 0.5) * 7), { color: '#cbbfa9', size: 1.4, life: 1.6, up: 1.2, spread: 2, radial: 2.5 });
+  }
+  if (k >= 1) this.game.finishDemolition(this);
+};
 
 // ===========================================================================
 class Building {
@@ -125,6 +185,8 @@ class Building {
     this.routeLength = this.computeRouteLength();
     this.construction = null;
     plot.building = this;
+    plot.owned = true;
+    plot.removeRuin();
     plot.setOccupied(true);
     if (construction > 0) this.startConstruction(construction);
     else this.rebuild(false);
@@ -557,6 +619,7 @@ export class Game {
     this.fx = new Effects(this.scene, this.camera, fxLayer);
     this.sound = new Sound();
     this.crowd = new CrowdRenderer(this.scene);
+    this.citizens = new Citizens(this);
     this.lodScale = 1;
     this.activeCount = 0;
     this.humansOnSite = false;
@@ -564,7 +627,7 @@ export class Game {
     this.listeners = {};
 
     this.canton = null;
-    this.cash = 40;
+    this.cash = 60;
     this.totalEarned = 0;
     this.upgrades = new Set();
     this.clock = 7 * 60 + 30; // game minutes since Monday 00:00 of week 1
@@ -851,7 +914,7 @@ export class Game {
     if (plot.building) return false;
     const biz = BIZ[typeId];
     if (!free) {
-      if (!this.isUnlocked(biz) || !biz.zones.includes(plot.zone)) return false;
+      if (!plot.owned || plot.ruin || !this.isUnlocked(biz) || !biz.zones.includes(plot.zone)) return false;
       const price = this.buildPrice(typeId), fee = this.permitFee(typeId);
       if (!this.spend(price + fee)) return false;
       this.week.fees += fee;
@@ -868,6 +931,51 @@ export class Game {
     this.computeRate();
     this.emit('change');
     return b;
+  }
+
+  /** Droits de mutation (impôt cantonal sur les transferts immobiliers), ≈3 %. */
+  transferTax(plot) { return plot.price * 0.03; }
+
+  buyPlot(plot) {
+    if (plot.owned || plot.building) return false;
+    const price = plot.price, tax = this.transferTax(plot);
+    if (!this.spend(price + tax)) return false;
+    this.week.fees += tax;
+    plot.owned = true;
+    plot.setOccupied(false);
+    this.sound.buy();
+    this.fx.sparkle(_v.set(plot.center.x, 3, plot.center.z), '#5effa8', 16);
+    this.toast(plot.ruin
+      ? `Bâtiment abandonné acheté (inscription au registre foncier). Démolis-le pour construire !`
+      : `Terrain acheté (registre foncier, droits de mutation ${money(tax)})`, 'contract', 'success');
+    this.emit('change');
+    return true;
+  }
+
+  demolitionPrice(plot) { return demolishCost(plot.price) * (1 + LAW.demolishPermit); }
+
+  startDemolition(plot) {
+    if (!plot.owned || !plot.ruin || plot.demolish) return false;
+    const cost = this.demolitionPrice(plot);
+    if (!this.spend(cost, true)) return false;
+    plot.startDemolition();
+    this.sound.build();
+    this.toast('Permis de démolir accordé : la pelleteuse arrive ! Clique sur le bâtiment pour aider à le casser.', 'crane', 'success');
+    this.emit('change');
+    return true;
+  }
+
+  finishDemolition(plot) {
+    const d = plot.demolish;
+    plot.group.remove(d.exc.group);
+    disposeObject(d.exc.group);
+    plot.demolish = null;
+    plot.removeRuin();
+    plot.setOccupied(false);
+    this.fx.dust(_v.set(plot.center.x, 0.3, plot.center.z), 22);
+    this.sound.buy();
+    this.toast('Démolition terminée, déchets triés (OLED). Le terrain est prêt à bâtir.', 'check', 'success');
+    this.emit('change');
   }
 
   finishConstruction(b) {
@@ -1115,8 +1223,8 @@ export class Game {
   spawnGolden() {
     const useX = Math.random() < 0.5;
     const pos = useX
-      ? new THREE.Vector3(ROADS_X[(Math.random() * ROADS_X.length) | 0], 0.2, (Math.random() - 0.5) * 80)
-      : new THREE.Vector3((Math.random() - 0.5) * 80, 0.2, ROADS_Z[(Math.random() * ROADS_Z.length) | 0]);
+      ? new THREE.Vector3(PLAY_ROADS[(Math.random() * PLAY_ROADS.length) | 0], 0.2, (Math.random() - 0.5) * PLAY_HALF * 1.6)
+      : new THREE.Vector3((Math.random() - 0.5) * PLAY_HALF * 1.6, 0.2, PLAY_ROADS[(Math.random() * PLAY_ROADS.length) | 0]);
     this.golden = { life: 20, pos };
     this.goldenObj.root.position.copy(pos);
     this.goldenObj.root.visible = true;
@@ -1199,6 +1307,7 @@ export class Game {
     else if (hit.type === 'hq') { this.clickHQ(hit.point); this.select({ hq: true, center: new THREE.Vector3() }); }
     else if (hit.type === 'plot') {
       const p = hit.plot;
+      if (p.demolish) p.smash();
       this.select(p.building || p);
     }
   }
@@ -1217,7 +1326,9 @@ export class Game {
         this.hoverFrame.visible = this.selected !== pl && this.selected !== pl.building;
         tip = pl.building
           ? `${icon(pl.building.typeId)} ${pl.building.biz.name} · ${pl.building.open ? 'Niv. ' + pl.building.level : 'en construction'}`
-          : `${icon('crane')} Parcelle à vendre · ${ZONES[pl.zone].name}`;
+          : pl.demolish ? `${icon('crane')} Démolition — clique pour casser !`
+            : pl.ruin ? `${icon('warning')} ${pl.owned ? 'Ton bâtiment abandonné · à démolir' : 'Bâtiment abandonné à vendre · ' + money(pl.price)}`
+              : pl.owned ? `${icon('crane')} Ton terrain · prêt à bâtir` : `${icon('pin')} Terrain à vendre · ${money(pl.price)}`;
       } else if (hit.type === 'worker') {
         const w = hit.worker;
         tip = `${icon(w.tier.icon)} ${w.data.name} (${w.tier.short}) — ${w.statusLabel()} · clic : motiver`;
@@ -1248,8 +1359,12 @@ export class Game {
 
     for (const b of this.buildings.values()) b.update(dt, t);
     for (const w of this.workers) w.update(dt, t);
-    const holo = this.cash >= this.cheapestCache;
-    for (const p of this.plots.values()) p.update(t, holo && this.isFrontier(p));
+    this.citizens.update(dt, t);
+    const canBuild = this.cash >= this.cheapestCache;
+    for (const p of this.plots.values()) {
+      const holo = p.owned ? canBuild && !p.ruin : (!p.ruin && this.isFrontier(p) && this.cash >= p.price);
+      p.update(t, dt, holo);
+    }
 
     this.hqCoin.rotation.y += dt * 1.6;
     this.hqCoin.position.y = 12.6 + Math.sin(t * 1.5) * 0.3;
@@ -1304,7 +1419,7 @@ export class Game {
 
   /** Called right before rendering, after the camera moved. */
   renderPrep() {
-    this.crowd.update(this.workers, this.camera);
+    this.crowd.update(this.camera, this.workers, this.citizens.list);
   }
 
   setLodScale(scale) {
@@ -1367,6 +1482,9 @@ export class Game {
       lastWeek: this.lastWeek,
       pending: this.pending,
       savedAt: Date.now(),
+      owned: [...this.plots.values()].filter((p) => p.owned).map((p) => p.key),
+      cleared: [...this.plots.values()].filter((p) => !p.ruin).map((p) => p.key),
+      demolishing: Object.fromEntries([...this.plots.values()].filter((p) => p.demolish).map((p) => [p.key, p.demolish.t])),
       buildings: [...this.buildings.values()].map((b) => ({
         key: b.plot.key,
         type: b.typeId,
@@ -1398,6 +1516,17 @@ export class Game {
     this.week = data.week || emptyLedger();
     this.lastWeek = data.lastWeek || null;
     this.pending = data.pending || { wages: 0, charges: 0 };
+    if (data.cleared) {
+      for (const p of this.plots.values()) if (data.cleared.includes(p.key)) p.removeRuin();
+    }
+    for (const key of data.owned || []) {
+      const p = this.plots.get(key);
+      if (p) { p.owned = true; p.setOccupied(false); }
+    }
+    for (const [key, t] of Object.entries(data.demolishing || {})) {
+      const p = this.plots.get(key);
+      if (p && p.ruin) { p.startDemolition(); p.demolish.t = t; }
+    }
     for (const bd of data.buildings) {
       const plot = this.plots.get(bd.key);
       if (!plot || !BIZ[bd.type]) continue;

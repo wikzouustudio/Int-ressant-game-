@@ -38,6 +38,7 @@ async function boot() {
     game.fx.density = t.particles;
     env.setVegetationDistance(t.vegDist);
     env.setClouds(t.clouds);
+    game.citizens.setMax(t.citizens);
     fpsCap = fps;
   });
   quality.start();

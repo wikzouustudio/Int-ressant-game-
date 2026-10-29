@@ -119,14 +119,14 @@ export class CrowdRenderer {
     for (const b of this.buckets.values()) if (b.mesh && b.lod === LOD_FAR) b.mesh.castShadow = on;
   }
 
-  update(workers, camera) {
+  update(camera, ...lists) {
     _pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(_pm);
     for (const b of this.buckets.values()) b.n = 0;
     let drawn = 0, culled = 0, far = 0;
     const cam = camera.position;
     const D = this.lodDistance;
-    for (const w of workers) {
+    for (const list of lists) for (const w of list) {
       const c = w.char;
       if (!c.root.visible) continue;
       const p = c.root.position;

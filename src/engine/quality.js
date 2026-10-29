@@ -4,14 +4,14 @@
 // image does not "breathe".
 
 export const TIERS = [
-  { id: 'low', name: 'Bas', maxDpr: 1, aa: 0, bloom: false, shadowSize: 1024, shadowSoft: false, shadowEvery: 2,
-    shadowRange: 0.85, lodScale: 0.55, crowdLod: 32, farShadows: false, particles: 0.4, vegDist: 230, clouds: false },
-  { id: 'medium', name: 'Moyen', maxDpr: 1.25, aa: 2, bloom: false, shadowSize: 2048, shadowSoft: false, shadowEvery: 1,
-    shadowRange: 1, lodScale: 0.8, crowdLod: 46, farShadows: false, particles: 0.7, vegDist: 360, clouds: true },
-  { id: 'high', name: 'Élevé', maxDpr: 1.75, aa: 4, bloom: true, shadowSize: 2048, shadowSoft: true, shadowEvery: 1,
-    shadowRange: 1, lodScale: 1, crowdLod: 60, farShadows: true, particles: 1, vegDist: 560, clouds: true },
-  { id: 'ultra', name: 'Ultra', maxDpr: 2, aa: 4, bloom: true, shadowSize: 4096, shadowSoft: true, shadowEvery: 1,
-    shadowRange: 1.15, lodScale: 1.4, crowdLod: 90, farShadows: true, particles: 1, vegDist: 900, clouds: true },
+  { id: 'low', name: 'Bas', maxDpr: 1.5, aa: 0, bloom: false, shadowSize: 2048, shadowSoft: false, shadowEvery: 2,
+    shadowRange: 0.85, lodScale: 0.55, crowdLod: 32, farShadows: false, particles: 0.4, vegDist: 230, clouds: false, citizens: 24 },
+  { id: 'medium', name: 'Moyen', maxDpr: 1.75, aa: 0, bloom: false, shadowSize: 2048, shadowSoft: false, shadowEvery: 1,
+    shadowRange: 1, lodScale: 0.8, crowdLod: 46, farShadows: false, particles: 0.7, vegDist: 360, clouds: true, citizens: 50 },
+  { id: 'high', name: 'Élevé', maxDpr: 2, aa: 4, bloom: true, shadowSize: 2048, shadowSoft: true, shadowEvery: 1,
+    shadowRange: 1, lodScale: 1, crowdLod: 60, farShadows: true, particles: 1, vegDist: 560, clouds: true, citizens: 90 },
+  { id: 'ultra', name: 'Ultra', maxDpr: 2.5, aa: 4, bloom: true, shadowSize: 4096, shadowSoft: true, shadowEvery: 1,
+    shadowRange: 1.15, lodScale: 1.4, crowdLod: 90, farShadows: true, particles: 1, vegDist: 900, clouds: true, citizens: 140 },
 ];
 
 /** Best guess of what the device can sustain, used as the auto mode's ceiling. */

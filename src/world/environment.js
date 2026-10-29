@@ -2,18 +2,24 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { MeshBuilder, rng } from '../models/builder.js';
 import { setNightLevel } from '../models/materials.js';
-import { CELL, GRID, ROAD_Y } from '../game/config.js';
+import { CELL, GRID, DECOR, ROAD_Y, CITY_HALF, PLAY_HALF } from '../game/config.js';
+import { buildCityscape } from '../models/cityscape.js';
 
 const ROAD_W = CELL - 13;
 const LAMP_RY = -Math.PI / 4;
-export const ROADS_X = [];
-export const ROADS_Z = [];
-for (let i = -GRID; i < GRID; i++) ROADS_X.push((i + 0.5) * CELL);
-for (let j = -GRID; j <= GRID; j++) ROADS_Z.push((j + 0.5) * CELL);
-export const CITY_MIN_X = -(GRID + 0.5) * CELL;
-export const CITY_MAX_X = (GRID + 0.5) * CELL;
-export const CITY_MIN_Z = -(GRID + 0.5) * CELL;
-export const CITY_MAX_Z = (GRID + 0.5) * CELL + ROAD_W / 2;
+// Road grid lines (x = const and z = const), covering the playable district and the
+// decorative rings around it. Both arrays include the outer boundary roads.
+export const ROADS = [];
+for (let k = -(GRID + DECOR) - 1; k <= GRID + DECOR; k++) ROADS.push((k + 0.5) * CELL);
+export const ROADS_X = ROADS;
+export const ROADS_Z = ROADS;
+/** Road lines that lie inside the playable district (golden briefcases, events). */
+export const PLAY_ROADS = ROADS.filter((v) => Math.abs(v) <= PLAY_HALF + 0.1);
+export const CITY_MIN_X = -CITY_HALF;
+export const CITY_MAX_X = CITY_HALF;
+export const CITY_MIN_Z = -CITY_HALF;
+export const CITY_MAX_Z = CITY_HALF;
+const POND = { x: -(CITY_HALF + 48), z: 10 };
 
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -24,10 +30,10 @@ const groundNoise = (x, z) => Math.sin(x * 0.05) * Math.cos(z * 0.06) + Math.sin
 
 export function heightAt(x, z) {
   const n = groundNoise(x, z);
-  const dCity = Math.max(Math.abs(x) - 55, z < 0 ? -z - 52 : z - 62, 0);
+  const dCity = Math.max(Math.abs(x) - CITY_HALF - 8, Math.abs(z) - CITY_HALF - 8, 0);
   let h = 0;
   if (dCity > 0) h = smooth(0, 60, dCity) * (2.5 + n * 2.5) + smooth(120, 400, dCity) * 25 * (0.6 + 0.4 * Math.sin(x * 0.01 + z * 0.012));
-  const pd = Math.hypot(x + 82, z - 8);
+  const pd = Math.hypot(x - POND.x, z - POND.z);
   if (pd < 30) h = Math.min(h, -0.6 * (1 - pd / 30) + h * (pd / 30));
   return h;
 }
@@ -117,13 +123,11 @@ export function createEnvironment(engine) {
     g.translate(x, ROAD_Y / 2, z);
     wb.push(g);
   };
-  for (const z of ROADS_Z) addStrip(0, z, CITY_MAX_X - CITY_MIN_X + ROAD_W, ROAD_W);
-  const lastZ = ROADS_Z[ROADS_Z.length - 1];
-  for (const x of ROADS_X) addStrip(x, (CITY_MIN_Z + lastZ) / 2, ROAD_W, lastZ - CITY_MIN_Z + ROAD_W);
-  // outer rings
-  addStrip(CITY_MIN_X, (CITY_MIN_Z + CITY_MAX_Z) / 2, ROAD_W, CITY_MAX_Z - CITY_MIN_Z + 2);
-  addStrip(CITY_MAX_X, (CITY_MIN_Z + CITY_MAX_Z) / 2, ROAD_W, CITY_MAX_Z - CITY_MIN_Z + 2);
-  addStrip(0, CITY_MIN_Z, CITY_MAX_X - CITY_MIN_X + ROAD_W, ROAD_W);
+  const span = 2 * CITY_HALF + ROAD_W;
+  for (const v of ROADS) {
+    addStrip(0, v, span, ROAD_W);
+    addStrip(v, 0, ROAD_W, span);
+  }
   const roadsGeo = mergeBoxes(wb);
   const pos = roadsGeo.attributes.position;
   const uv = roadsGeo.attributes.uv;
@@ -132,13 +136,13 @@ export function createEnvironment(engine) {
   roads.receiveShadow = true;
   root.add(roads);
 
+  // ---------------- Decorative city blocks around the playable district ----------------
+  const cityscape = buildCityscape();
+  root.add(cityscape.group);
+
   // ---------------- Street lamps (instanced) ----------------
   const lampPos = [];
-  for (const x of [CITY_MIN_X, ...ROADS_X, CITY_MAX_X]) {
-    for (const z of [CITY_MIN_Z, ...ROADS_Z]) {
-      lampPos.push([x + 2.0, z + 2.0]);
-    }
-  }
+  for (const x of ROADS) for (const z of ROADS) lampPos.push([x + 2.0, z + 2.0]);
   const lb = new MeshBuilder();
   lb.cyl(0.22, 0.3, 0.4, '#2b2f36', { mat: 'metal' }, 10);
   lb.cyl(0.08, 0.11, 4.6, '#2b2f36', { mat: 'metal' }, 8);
@@ -179,14 +183,14 @@ export function createEnvironment(engine) {
   const treeSpots = [];
   const tryPlace = (x, z) => {
     if (x > CITY_MIN_X - 6 && x < CITY_MAX_X + 6 && z > CITY_MIN_Z - 6 && z < CITY_MAX_Z + 6) return false;
-    if (Math.hypot(x + 82, z - 8) < 26) return false;
+    if (Math.hypot(x - POND.x, z - POND.z) < 26) return false;
     treeSpots.push([x, z]);
     return true;
   };
   // dense belt around the city
   for (let i = 0; i < 900 && treeSpots.length < 520; i++) {
     const a = r() * Math.PI * 2;
-    const d = 62 + Math.pow(r(), 1.6) * 190;
+    const d = CITY_HALF + 14 + Math.pow(r(), 1.6) * 190;
     tryPlace(Math.cos(a) * d * 1.05, 6 + Math.sin(a) * d);
   }
 
@@ -286,27 +290,27 @@ export function createEnvironment(engine) {
   }
   // rocks
   for (let i = 0; i < 60; i++) {
-    const a = r() * Math.PI * 2, d = 70 + r() * 150;
+    const a = r() * Math.PI * 2, d = CITY_HALF + 20 + r() * 150;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (Math.hypot(x + 82, z - 8) < 24) continue;
+    if (Math.hypot(x - POND.x, z - POND.z) < 24) continue;
     deco.blob(0.6 + r() * 1.4, ['#8d939b', '#a3a9b0', '#7b8189'][i % 3], { x, y: heightAt(x, z) + 0.2, z, sy: 0.6, ry: r() * 3 }, 1);
   }
   // pond rim stones + reeds
   for (let i = 0; i < 40; i++) {
     const a = (i / 40) * Math.PI * 2;
-    deco.blob(0.5 + r() * 0.5, '#b0aaa0', { x: -82 + Math.cos(a) * 21, y: 0, z: 8 + Math.sin(a) * 15.5, sy: 0.5 });
-    if (i % 3 === 0) deco.cyl(0.05, 0.05, 1.6, '#5a8f3a', { x: -82 + Math.cos(a) * 19, y: -0.3, z: 8 + Math.sin(a) * 14 }, 4);
+    deco.blob(0.5 + r() * 0.5, '#b0aaa0', { x: POND.x + Math.cos(a) * 21, y: 0, z: POND.z + Math.sin(a) * 15.5, sy: 0.5 });
+    if (i % 3 === 0) deco.cyl(0.05, 0.05, 1.6, '#5a8f3a', { x: POND.x + Math.cos(a) * 19, y: -0.3, z: POND.z + Math.sin(a) * 14 }, 4);
   }
   // wooden dock
-  deco.box(3, 0.2, 8, '#9c6b3f', { x: -64, y: 0.3, z: 8, ry: Math.PI / 2 });
-  for (let i = 0; i < 4; i++) deco.cyl(0.15, 0.15, 1.2, '#6f4627', { x: -61 - i * 2.4, y: -0.6, z: 6.6 }, 6);
+  deco.box(3, 0.2, 8, '#9c6b3f', { x: POND.x + 18, y: 0.3, z: POND.z, ry: Math.PI / 2 });
+  for (let i = 0; i < 4; i++) deco.cyl(0.15, 0.15, 1.2, '#6f4627', { x: POND.x + 21 - i * 2.4, y: -0.6, z: POND.z - 1.4 }, 6);
   root.add(deco.build());
 
   // Pond water
   const waterMat = new THREE.MeshStandardMaterial({ color: '#2f9fc7', roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.9 });
   const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), waterMat);
   water.scale.set(21, 1, 15.5);
-  water.position.set(-82, 0.05, 8);
+  water.position.set(POND.x, 0.05, POND.z);
   water.receiveShadow = true;
   root.add(water);
 
@@ -362,7 +366,7 @@ export function createEnvironment(engine) {
   let frame = 0;
   const focusSnap = new THREE.Vector3();
   function fitShadows(focus, camDist) {
-    const half = Math.min(78, Math.max(26, Math.round((camDist * 0.62 * shadowRange) / 4) * 4));
+    const half = Math.min(95, Math.max(26, Math.round((camDist * 0.62 * shadowRange) / 4) * 4));
     const texel = (2 * half) / sun.shadow.mapSize.x;
     focusSnap.set(Math.round(focus.x / texel) * texel, 0, Math.round(focus.z / texel) * texel);
     sun.target.position.copy(focusSnap);
