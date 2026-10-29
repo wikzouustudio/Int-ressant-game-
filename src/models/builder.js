@@ -65,10 +65,23 @@ export class MeshBuilder {
     return this;
   }
 
+  /** Boxes are softly rounded by default (cartoon look); pass `sharp: true` to opt out. */
   box(w, h, d, color, o = {}) {
-    const g = new THREE.BoxGeometry(w, h, d);
+    const m = Math.min(w, h, d);
+    let g;
+    if (o.sharp || m < 0.05) {
+      g = new THREE.BoxGeometry(w, h, d);
+    } else {
+      const r = Math.min(o.r ?? 0.1, m * 0.32);
+      g = new RoundedBoxGeometry(w, h, d, Math.max(w, h, d) > 2.5 ? 2 : 1, r);
+    }
     g.translate(0, h / 2, 0);
     return this.geo(g, color, o);
+  }
+
+  /** Smooth low-poly blob (bushes, cartoon rocks, foliage). */
+  blob(r, color, o = {}, detail = 2) {
+    return this.geo(new THREE.IcosahedronGeometry(r, detail), color, o);
   }
 
   rbox(w, h, d, r, color, o = {}) {

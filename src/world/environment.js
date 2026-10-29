@@ -190,13 +190,12 @@ export function createEnvironment(engine) {
     tryPlace(Math.cos(a) * d * 1.05, 6 + Math.sin(a) * d);
   }
 
-  const trunkGeo = new THREE.CylinderGeometry(0.25, 0.4, 2.4, 6).translate(0, 1.2, 0);
-  const crownGeo = new THREE.IcosahedronGeometry(2, 0).translate(0, 3.8, 0);
-  crownGeo.computeVertexNormals();
-  const pineGeo = new THREE.ConeGeometry(1.9, 5.5, 7).translate(0, 4.4, 0);
-  const pine2Geo = new THREE.ConeGeometry(1.4, 3.6, 7).translate(0, 6.6, 0);
+  const trunkGeo = new THREE.CylinderGeometry(0.28, 0.42, 2.6, 10).translate(0, 1.3, 0);
+  const crownGeo = mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]]);
+  const pineGeo = new THREE.ConeGeometry(1.9, 5.5, 14).translate(0, 4.4, 0);
+  const pine2Geo = new THREE.ConeGeometry(1.4, 3.6, 14).translate(0, 6.6, 0);
   const trunkMat = new THREE.MeshStandardMaterial({ color: '#7a5233', roughness: 1 });
-  const leafMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.9, flatShading: true });
+  const leafMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 });
   const nRound = Math.floor(treeSpots.length * 0.55);
   const nPine = treeSpots.length - nRound;
   const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, treeSpots.length);
@@ -234,13 +233,13 @@ export function createEnvironment(engine) {
   const deco = new MeshBuilder();
   for (let x = CITY_MIN_X - 4; x <= CITY_MAX_X + 4; x += 3.2) {
     for (const z of [CITY_MIN_Z - 4.5, CITY_MAX_Z + 4]) {
-      deco.ico(0.9 + r() * 0.5, leafColors[Math.floor(r() * 6)], { x: x + r(), y: 0.5, z: z + r() - 0.5, sy: 0.8 });
+      deco.blob(0.9 + r() * 0.5, leafColors[Math.floor(r() * 6)], { x: x + r(), y: 0.5, z: z + r() - 0.5, sy: 0.8 }, 1);
       if (r() < 0.5) deco.sphere(0.18, ['#ff6b9a', '#ffd43b', '#ffffff', '#b197fc'][Math.floor(r() * 4)], { x: x + 1.2, y: 0.3, z: z + 1.3 }, 6, 4);
     }
   }
   for (let z = CITY_MIN_Z - 4; z <= CITY_MAX_Z + 4; z += 3.2) {
     for (const x of [CITY_MIN_X - 4.5, CITY_MAX_X + 4.5]) {
-      deco.ico(0.9 + r() * 0.5, leafColors[Math.floor(r() * 6)], { x: x + r() - 0.5, y: 0.5, z: z + r(), sy: 0.8 });
+      deco.blob(0.9 + r() * 0.5, leafColors[Math.floor(r() * 6)], { x: x + r() - 0.5, y: 0.5, z: z + r(), sy: 0.8 }, 1);
     }
   }
   // rocks
@@ -248,12 +247,12 @@ export function createEnvironment(engine) {
     const a = r() * Math.PI * 2, d = 70 + r() * 150;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
     if (Math.hypot(x + 82, z - 8) < 24) continue;
-    deco.ico(0.6 + r() * 1.4, ['#8d939b', '#a3a9b0', '#7b8189'][i % 3], { x, y: heightAt(x, z) + 0.2, z, sy: 0.6, ry: r() * 3 });
+    deco.blob(0.6 + r() * 1.4, ['#8d939b', '#a3a9b0', '#7b8189'][i % 3], { x, y: heightAt(x, z) + 0.2, z, sy: 0.6, ry: r() * 3 }, 1);
   }
   // pond rim stones + reeds
   for (let i = 0; i < 40; i++) {
     const a = (i / 40) * Math.PI * 2;
-    deco.ico(0.5 + r() * 0.5, '#b0aaa0', { x: -82 + Math.cos(a) * 21, y: 0, z: 8 + Math.sin(a) * 15.5, sy: 0.5 });
+    deco.blob(0.5 + r() * 0.5, '#b0aaa0', { x: -82 + Math.cos(a) * 21, y: 0, z: 8 + Math.sin(a) * 15.5, sy: 0.5 });
     if (i % 3 === 0) deco.cyl(0.05, 0.05, 1.6, '#5a8f3a', { x: -82 + Math.cos(a) * 19, y: -0.3, z: 8 + Math.sin(a) * 14 }, 4);
   }
   // wooden dock
@@ -287,13 +286,13 @@ export function createEnvironment(engine) {
 
   // Clouds
   const clouds = [];
-  const cloudMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, flatShading: true, transparent: true, opacity: 0.95 });
+  const cloudMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: 0.95 });
   const rc = rng(5);
   for (let i = 0; i < 14; i++) {
     const cb = new MeshBuilder();
     const n = 4 + Math.floor(rc() * 4);
     for (let k = 0; k < n; k++) {
-      cb.ico(4 + rc() * 4, '#ffffff', { x: (k - n / 2) * 4.5, y: rc() * 2, z: (rc() - 0.5) * 5, sy: 0.65 }, 1);
+      cb.blob(4 + rc() * 4, '#ffffff', { x: (k - n / 2) * 4.5, y: rc() * 2, z: (rc() - 0.5) * 5, sy: 0.65 }, 2);
     }
     const cg = cb.build({ castShadow: false, receiveShadow: false });
     cg.children.forEach((m) => { m.material = cloudMat; });
@@ -393,6 +392,21 @@ function mergeBoxes(list) {
   out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   out.setIndex(new THREE.BufferAttribute(idx, 1));
   return out;
+}
+
+function mergeBlobs(list) {
+  const geos = list.map(([x, y, z, r]) => {
+    const g = new THREE.IcosahedronGeometry(r, 2);
+    g.translate(x, y, z);
+    return g;
+  });
+  const merged = mergeBoxes(geos.map((g) => {
+    const idx = [];
+    for (let i = 0; i < g.attributes.position.count; i++) idx.push(i);
+    g.setIndex(idx);
+    return g;
+  }));
+  return merged;
 }
 
 function toInstanced(mesh, count) {
