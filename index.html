@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Empire Inc. — Tycoon 3D</title>
+    <meta name="description" content="Construis ton empire : achète des commerces, embauche des employés qui travaillent et te rapportent de l'argent." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="fx-layer"></div>
+
+    <header id="hud">
+      <div class="brand">
+        <div class="logo">E</div>
+        <div class="brand-text"><b>EMPIRE INC.</b><small>Tycoon 3D</small></div>
+      </div>
+      <div class="money-card">
+        <div class="cash" id="cash">$0</div>
+        <div class="rate"><span id="rate">+$0/s</span><span id="rush-badge" class="rush-badge hidden">x2</span></div>
+      </div>
+      <div class="chips">
+        <div class="chip" title="Employés"><span>👷</span><b id="st-workers">0</b></div>
+        <div class="chip" title="Bâtiments"><span>🏢</span><b id="st-buildings">0</b></div>
+        <div class="chip" title="Heure"><span id="st-clock-icon">☀️</span><b id="st-clock">08:00</b></div>
+      </div>
+      <nav class="actions">
+        <button id="btn-research" class="btn-main"><span>🔬</span><em>Recherche</em><i id="research-dot" class="dot hidden"></i></button>
+        <button id="btn-stats" title="Statistiques"><span>📊</span></button>
+        <button id="btn-sound" title="Son"><span>🔊</span></button>
+        <button id="btn-settings" title="Paramètres"><span>⚙️</span></button>
+      </nav>
+    </header>
+
+    <aside id="panel" class="panel hidden"></aside>
+    <div id="modal" class="modal hidden"><div class="modal-card" id="modal-card"></div></div>
+    <div id="tutorial" class="tutorial hidden"></div>
+    <div id="banner" class="banner hidden"></div>
+    <div id="toasts"></div>
+    <div id="tooltip" class="tooltip hidden"></div>
+    <div id="controls-hint">🖱️ Glisser : tourner · Clic droit : déplacer · Molette : zoom · ZQSD/WASD : se déplacer</div>
+
+    <div id="loader">
+      <div class="loader-inner">
+        <div class="logo big">E</div>
+        <h1>EMPIRE INC.</h1>
+        <p>Construction de ta ville…</p>
+        <div class="bar"><div id="loader-bar"></div></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
