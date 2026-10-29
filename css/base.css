@@ -1,0 +1,104 @@
+/* ============================================================
+   FocusTube — tokens & base
+   Layout: barre du haut fixe + sidebar + grille de "vidéos" (tâches)
+   ============================================================ */
+
+:root {
+  /* Couleurs (thème clair) */
+  --bg: #ffffff;
+  --bg-elev: #ffffff;
+  --bg-soft: #f2f2f2;
+  --bg-hover: #e5e5e5;
+  --chip-active-bg: #0f0f0f;
+  --chip-active-fg: #ffffff;
+  --text: #0f0f0f;
+  --text-2: #606060;
+  --border: #e0e0e0;
+  --red: #ff0033;
+  --red-deep: #cc0000;
+  --blue: #065fd4;
+  --green: #2ba640;
+  --shadow: 0 4px 32px rgba(0, 0, 0, .16);
+  --scrim: rgba(0, 0, 0, .5);
+
+  /* Typo */
+  --font: "Roboto", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --mono: "Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  /* Dimensions */
+  --topbar-h: 56px;
+  --sidebar-w: 240px;
+  --sidebar-mini: 72px;
+  --radius: 12px;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0f0f;
+    --bg-elev: #282828;
+    --bg-soft: #272727;
+    --bg-hover: #3d3d3d;
+    --chip-active-bg: #f1f1f1;
+    --chip-active-fg: #0f0f0f;
+    --text: #f1f1f1;
+    --text-2: #aaaaaa;
+    --border: #3f3f3f;
+    --blue: #3ea6ff;
+    --shadow: 0 4px 32px rgba(0, 0, 0, .6);
+    --scrim: rgba(0, 0, 0, .7);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f0f0f;
+  --bg-elev: #282828;
+  --bg-soft: #272727;
+  --bg-hover: #3d3d3d;
+  --chip-active-bg: #f1f1f1;
+  --chip-active-fg: #0f0f0f;
+  --text: #f1f1f1;
+  --text-2: #aaaaaa;
+  --border: #3f3f3f;
+  --blue: #3ea6ff;
+  --shadow: 0 4px 32px rgba(0, 0, 0, .6);
+  --scrim: rgba(0, 0, 0, .7);
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 6px; }
+
+svg.i { width: 24px; height: 24px; fill: currentColor; flex: none; display: block; }
+
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

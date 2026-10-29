@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FocusTube</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-left">
+    <button class="icon-btn" data-action="toggle-sidebar" aria-label="Menu" data-icon="menu"></button>
+    <a href="#home" class="logo" aria-label="Accueil FocusTube">
+      <span class="logo-mark" aria-hidden="true"></span>
+      <span class="logo-word">FocusTube</span>
+      <sup class="logo-country">FR</sup>
+    </a>
+  </div>
+  <form class="search" id="search-form" role="search">
+    <input id="search-input" type="search" placeholder="Rechercher une tâche" autocomplete="off" aria-label="Rechercher">
+    <button class="search-btn" type="submit" aria-label="Rechercher" data-icon="search"></button>
+  </form>
+  <div class="topbar-right">
+    <button class="create-btn" data-action="new-task"><span data-icon="add"></span><span class="create-label">Créer</span></button>
+    <button class="icon-btn" data-action="toggle-theme" aria-label="Changer de thème" data-icon="theme"></button>
+    <a href="#studio" class="avatar" aria-label="Studio">M</a>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="sidebar" id="sidebar" aria-label="Navigation"></nav>
+  <div class="backdrop" data-action="close-drawer"></div>
+  <main id="view" class="view"></main>
+</div>
+
+<div id="miniplayer" class="miniplayer" hidden></div>
+<div id="modal-root"></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<div id="confetti" class="confetti" aria-hidden="true"></div>
+
+<script src="js/utils.js"></script>
+<script src="js/store.js"></script>
+<script src="js/timer.js"></script>
+<script src="js/views.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
