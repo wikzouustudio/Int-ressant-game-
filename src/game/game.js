@@ -4,7 +4,8 @@ import {
   ROBOT_UPKEEP, FIRST_NAMES, ROBOT_NAMES, DAYS, levelMult, slotsFor, buildCost, upgradeCost, hireCost,
   trainingCost, buildTime, money,
 } from './config.js';
-import { buildBusiness, buildHQ, buildSign, buildForSale, buildConstructionSite, easeOutBack, setBuildingLodScale, buildRuin, buildExcavator } from '../models/buildings.js';
+import { buildBusiness, buildHQ, buildSign, buildForSale, easeOutBack, setBuildingLodScale, buildRuin } from '../models/buildings.js';
+import { buildConstructionSite, buildExcavator, buildRubble, bucketTip } from '../models/machines.js';
 import { createCharacter, animateCharacter, randomLook } from '../models/character.js';
 import { MeshBuilder, disposeObject } from '../models/builder.js';
 import { Effects } from './fx.js';
@@ -54,6 +55,18 @@ class Plot {
     for (let k = 0; k < 7; k++) {
       g.sphere(0.12, ['#ffffff', '#ffd43b', '#ff8fab'][k % 3], { x: Math.sin(k * 7.3 + i) * 5, y: PAD_Y + 0.02, z: Math.cos(k * 3.1 + j) * 5, sy: 0.5 }, 6, 4);
     }
+    // wild vacant lot: grass tufts, bushes and the odd young tree
+    const wr = (k) => Math.abs(Math.sin((i * 12.9898 + j * 78.233 + k) * 43758.5453)) % 1;
+    for (let k = 0; k < 9; k++) {
+      const x = (wr(k) - 0.5) * 11, z = (wr(k + 20) - 0.5) * 11;
+      if (wr(k + 40) < 0.65) g.cone(0.18, 0.45, k % 2 ? '#6fae3d' : '#8cc152', { x, y: PAD_Y, z }, 5);
+      else g.blob(0.35 + wr(k + 60) * 0.35, k % 2 ? '#4ca346' : '#5cb84a', { x, y: PAD_Y + 0.25, z, sy: 0.75 }, 1);
+    }
+    if (wr(99) < 0.5) {
+      const tx = wr(98) < 0.5 ? -4.6 : 4.6, tz = wr(97) < 0.5 ? -4.4 : -1;
+      g.cyl(0.12, 0.17, 1.4, '#7a5233', { x: tx, y: PAD_Y, z: tz }, 6);
+      g.blob(0.9, '#5cb84a', { x: tx, y: PAD_Y + 2.0, z: tz }, 1);
+    }
     this.grass = g.build({ castShadow: false });
     this.group.add(this.grass);
     const c = new MeshBuilder();
@@ -80,7 +93,7 @@ class Plot {
     this.group.add(this.holo);
 
     this.hit = new THREE.Mesh(
-      new THREE.BoxGeometry(PAD, 7, PAD).translate(0, 3.5, 0),
+      new THREE.BoxGeometry(PAD, 1, PAD).translate(0, 0.5, 0),
       new THREE.MeshBasicMaterial({ visible: false })
     );
     this.hit.userData = { type: 'plot', plot: this };
@@ -102,6 +115,8 @@ class Plot {
     this.ruin = buildRuin((this.i + 20) * 101 + (this.j + 20) * 7);
     this.ruin.position.y = PAD_Y;
     this.group.add(this.ruin);
+    this.ruinPick = this.ruin.getObjectByName('shadow-proxy');
+    this.ruinPick.userData = { type: 'plot', plot: this };
   }
 
   removeRuin() {
@@ -132,38 +147,107 @@ class Plot {
   }
 }
 
+const ease = (x) => x * x * (3 - 2 * x);
+const _dir = new THREE.Vector3(0, 0.25, -1);
+
 Plot.prototype.startDemolition = function startDemolition() {
   const exc = buildExcavator();
-  exc.group.position.set(3.2, PAD_Y, 5.2);
-  exc.group.rotation.y = Math.PI * 0.85;
+  exc.group.position.set(2.6, PAD_Y, 12);
+  exc.group.rotation.y = Math.PI; // arm points toward the building (-Z)
   this.group.add(exc.group);
-  this.demolish = { t: 0, total: demolishTime(this.i, this.j), exc, puff: 0 };
+  const rubble = buildRubble(this.ruin.userData.wall || '#b8ab98');
+  rubble.position.y = PAD_Y;
+  rubble.scale.setScalar(0.01);
+  rubble.visible = false;
+  this.group.add(rubble);
+  this.demolish = { t: 0, total: demolishTime(this.i, this.j), exc, rubble, cyc: 0, lastStrike: -1, damage: 0, puff: 0 };
 };
 
-/** Each click on a ruin being demolished knocks a chunk off (speeds the job up). */
+/** One excavator blow: debris flies off the facade, dust, a thud and a small shake. */
+Plot.prototype.impact = function impact(strong = 1) {
+  const d = this.demolish;
+  const g = this.game;
+  bucketTip(d.exc, _v);
+  const wall = this.ruin?.userData.wall || '#b8ab98';
+  g.fx.debris(_v, wall, 9 * strong, _dir, 1.1 * strong, PAD_Y);
+  g.fx.debris(_v, '#8a6a46', 3, _dir, 0.9, PAD_Y);
+  g.fx.puff(_v, { color: '#cbbfa9', size: 1.1, life: 1.2, up: 1.4, spread: 1.6, radial: 3.5, count: 6, grow: 1.1 });
+  g.engine.controls.cam.shake(0.22 * strong);
+  g.sound.thud();
+  d.damage++;
+};
+
+/** Each click on a ruin being demolished lands an extra blow (speeds the job up). */
 Plot.prototype.smash = function smash() {
-  if (!this.demolish) return;
-  this.demolish.t += 0.6;
-  this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 8, 1.5 + Math.random() * 3, this.center.z + (Math.random() - 0.5) * 6), { color: '#bfb3a0', size: 0.8, life: 0.9, up: 1.8, spread: 2, radial: 4, count: 5, grow: 0.6 });
-  this.game.sound.whoosh();
+  const d = this.demolish;
+  if (!d || d.t < 1.6 || !this.ruin) return;
+  d.t = Math.min(d.total * 0.84, d.t + 0.6);
+  this.impact(1.3);
 };
 
 Plot.prototype.updateDemolition = function updateDemolition(t, dt) {
   const d = this.demolish;
+  const { exc } = d;
   d.t += dt;
   const k = Math.min(1, d.t / d.total);
-  if (this.ruin) {
-    // crumble: the ruin shakes and sinks into its own rubble
-    this.ruin.scale.y = Math.max(0.08, 1 - k * 0.92);
-    this.ruin.position.x = (Math.random() - 0.5) * 0.12 * (1 - k);
-    this.ruin.position.z = (Math.random() - 0.5) * 0.12 * (1 - k);
+  const lerp = THREE.MathUtils.lerp;
+
+  if (d.t < 1.6) {
+    // drive in from the street, arm folded
+    const m = ease(d.t / 1.6);
+    exc.group.position.z = lerp(12, 5.6, m);
+    exc.boom.rotation.x = -0.55; exc.stick.rotation.x = 1.3; exc.bucket.rotation.x = 0.9;
+    d.puff -= dt;
+    if (d.puff <= 0) {
+      d.puff = 0.12;
+      this.game.fx.puff(_v.set(this.center.x + 2.6 + (Math.random() - 0.5) * 2, 0.4, this.center.z + exc.group.position.z + 1.6), { color: '#d9c7a1', size: 0.6, life: 0.9, up: 0.8, spread: 0.8, radial: 1.5 });
+    }
+    return;
   }
-  d.exc.arm.rotation.x = -0.35 + Math.sin(t * 3) * 0.35;
-  d.exc.arm.rotation.y = Math.sin(t * 0.9) * 0.4;
-  d.puff -= dt;
-  if (d.puff <= 0) {
-    d.puff = 0.28;
-    this.game.fx.puff(_v.set(this.center.x + (Math.random() - 0.5) * 9, 0.6 + Math.random() * 2, this.center.z + (Math.random() - 0.5) * 7), { color: '#cbbfa9', size: 0.8, life: 1.1, up: 1.6, spread: 2, radial: 2.5, grow: 0.8 });
+
+  if (k < 0.86) {
+    // strike cycle: raise, slam into the facade, recover
+    d.cyc += dt;
+    const P = 1.15;
+    const s = (d.cyc % P) / P;
+    const n = Math.floor(d.cyc / P);
+    if (s < 0.5) {
+      const m = ease(s / 0.5);
+      exc.boom.rotation.x = lerp(0.05, -0.8, m); exc.stick.rotation.x = lerp(1.0, 0.35, m); exc.bucket.rotation.x = lerp(0.8, 0.1, m);
+    } else if (s < 0.6) {
+      const m = (s - 0.5) / 0.1;
+      exc.boom.rotation.x = lerp(-0.8, 0.3, m * m); exc.stick.rotation.x = lerp(0.35, 1.25, m * m); exc.bucket.rotation.x = lerp(0.1, 1.3, m);
+    } else {
+      const m = ease((s - 0.6) / 0.4);
+      exc.boom.rotation.x = lerp(0.3, 0.05, m); exc.stick.rotation.x = lerp(1.25, 1.0, m); exc.bucket.rotation.x = lerp(1.3, 0.8, m);
+    }
+    exc.cab.rotation.y = Math.sin(n * 2.1) * 0.35;
+    if (s >= 0.58 && d.lastStrike !== n) { d.lastStrike = n; this.impact(); }
+  } else {
+    // scoop the rubble away
+    const s = (t % 1.4) / 1.4;
+    exc.cab.rotation.y = Math.sin(t * 1.4) * 0.6;
+    exc.boom.rotation.x = lerp(-0.2, 0.25, Math.sin(s * Math.PI));
+    exc.stick.rotation.x = lerp(0.6, 1.4, s);
+    exc.bucket.rotation.x = lerp(1.4, 0.2, s);
+    d.puff -= dt;
+    if (d.puff <= 0) {
+      d.puff = 0.3;
+      bucketTip(exc, _v);
+      this.game.fx.debris(_v, this.ruin?.userData.wall || d.rubble.userData.wall || '#b8ab98', 3, null, 0.5, PAD_Y);
+    }
+  }
+
+  // the building crumbles in steps as it takes blows, then turns into a rubble mound
+  if (this.ruin) {
+    const target = Math.max(0.1, 1 - Math.min(1, k / 0.84) * 0.9);
+    this.ruin.scale.y += (target - this.ruin.scale.y) * Math.min(1, dt * 6);
+    this.ruin.rotation.z = Math.sin(d.damage * 1.7) * 0.025 * (1 - k);
+    this.ruin.rotation.x = Math.cos(d.damage * 2.3) * 0.02 * (1 - k);
+    if (k > 0.78) { d.rubble.visible = true; d.rubble.scale.setScalar(Math.min(1, (k - 0.78) / 0.07)); }
+    if (k > 0.86) { d.rubble.userData.wall = this.ruin.userData.wall; this.group.remove(this.ruin); disposeObject(this.ruin); this.ruin = null; this.game.fx.dust(_v.copy(this.center).setY(0.3), 18); }
+  } else if (k > 0.86) {
+    d.rubble.scale.setScalar(Math.max(0.01, 1 - (k - 0.86) / 0.14));
   }
   if (k >= 1) this.game.finishDemolition(this);
 };
@@ -198,9 +282,32 @@ class Building {
 
   startConstruction(remaining) {
     const total = buildTime(this.biz);
-    this.construction = { total, t: total - remaining, site: buildConstructionSite(this.biz.color) };
-    this.root.add(this.construction.site.group);
+    const site = buildConstructionSite(this.biz.color);
+    this.construction = { total, t: total - remaining, site, crew: [] };
+    this.root.add(site.group);
+    // construction crew (hard hats), drawn by the instanced crowd renderer
+    site.crewSpots.forEach(([x, y, z, yaw, anim], k) => {
+      const look = randomLook((this.plot.i + 9) * 977 + (this.plot.j + 9) * 61 + k * 13, 'builder', '#ff922b');
+      const char = createCharacter(look);
+      char.root.remove(char.hit);
+      char.root.rotation.y = yaw;
+      this.game.scene.add(char.root);
+      const m = { char, x, y, z, anim, phase: k * 1.7, uid: k };
+      this.construction.crew.push(m);
+      this.game.crew.push(m);
+    });
+    this.siteCtx = { fx: this.game.fx, toWorld: this.toWorldFn, shake: (a) => this.game.engine.controls.cam.shake(a) };
     this.makeSign();
+  }
+
+  removeCrew() {
+    if (!this.construction) return;
+    for (const m of this.construction.crew) {
+      this.game.scene.remove(m.char.root);
+      disposeObject(m.char.root);
+      this.game.crew.splice(this.game.crew.indexOf(m), 1);
+    }
+    this.construction.crew.length = 0;
   }
 
   makeSign() {
@@ -220,6 +327,8 @@ class Building {
     }
     this.model = buildBusiness(this.typeId, this.level, this.game.lodScale);
     this.root.add(this.model.group);
+    this.pickMesh = this.model.group.getObjectByName('shadow-proxy');
+    this.pickMesh.userData = { type: 'plot', plot: this.plot };
     this.makeSign();
     if (animate) this.anim = { t: 0, dur: 0.9 };
   }
@@ -293,9 +402,17 @@ class Building {
     if (this.construction) {
       const c = this.construction;
       c.t += dt;
-      c.site.update(c.t / c.total, t);
-      if (this.game.frame % 20 === 0 && c.t / c.total > 0.3) {
-        this.game.fx.puff(this.toWorld(new THREE.Vector3((Math.random() - 0.5) * 8, 0.5, (Math.random() - 0.5) * 6 - 1)), { color: '#d9cbb3', size: 0.8, life: 1.5, up: 0.8, spread: 1 });
+      const k = c.t / c.total;
+      c.site.update(k, t, dt, this.siteCtx);
+      for (const m of c.crew) {
+        const show = k >= 0.3 ? (m.y !== 'scaffold' || k > 0.45) : m.anim === 'inspect';
+        const root = m.char.root;
+        root.visible = show;
+        if (!show) continue;
+        const y = m.y === 'scaffold' ? PAD_Y + 0.4 + 1.25 - 0.02 : PAD_Y + 0.02;
+        if (k < 0.3) root.position.set(this.root.position.x - 3.2, y, this.root.position.z + 5.0);
+        else root.position.set(this.root.position.x + m.x, y, this.root.position.z + m.z);
+        if (!m.char.offscreen) animateCharacter(m.char, m.anim, t + m.phase, 0);
       }
       if (c.t >= c.total) this.game.finishConstruction(this);
       return;
@@ -620,6 +737,7 @@ export class Game {
     this.sound = new Sound();
     this.crowd = new CrowdRenderer(this.scene);
     this.citizens = new Citizens(this);
+    this.crew = [];
     this.lodScale = 1;
     this.activeCount = 0;
     this.humansOnSite = false;
@@ -967,8 +1085,9 @@ export class Game {
 
   finishDemolition(plot) {
     const d = plot.demolish;
-    plot.group.remove(d.exc.group);
+    plot.group.remove(d.exc.group, d.rubble);
     disposeObject(d.exc.group);
+    disposeObject(d.rubble);
     plot.demolish = null;
     plot.removeRuin();
     plot.setOccupied(false);
@@ -979,6 +1098,7 @@ export class Game {
   }
 
   finishConstruction(b) {
+    b.removeCrew();
     b.root.remove(b.construction.site.group);
     disposeObject(b.construction.site.group);
     b.construction = null;
@@ -1171,6 +1291,8 @@ export class Game {
     hit.userData = { type: 'hq' };
     group.add(hit);
     this.hqHit = hit;
+    this.hqPick = group.getObjectByName('shadow-proxy');
+    if (this.hqPick) this.hqPick.userData = { type: 'hq' };
     this.hqSign = buildSign('SIÈGE', 'Empire SA', '#f2c14e', 'bank');
     this.hqSign.position.set(-5.2, 0, 5.6);
     this.hqSign.rotation.y = 0.35;
@@ -1261,40 +1383,37 @@ export class Game {
   }
 
   bindInput() {
-    const el = this.engine.renderer.domElement;
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2(9, 9);
-    let down = null;
-    el.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY }; });
-    el.addEventListener('pointermove', (e) => {
-      this.mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-      this.pointerType = e.pointerType;
-    });
-    el.addEventListener('pointerleave', () => this.mouse.set(9, 9));
-    el.addEventListener('pointerup', (e) => {
-      if (!down) return;
-      const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
-      down = null;
-      if (moved > 7 || e.button !== 0) return;
-      this.mouse.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+    const cam = this.engine.controls.cam;
+    cam.onTap = (ndc, type) => {
+      this.mouse.copy(ndc);
+      this.pointerType = type;
       this.handleClick();
-    });
+    };
   }
 
+  /** Nearest object under the pointer, raycast against real (low-poly) shapes. */
   pick() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
     const objs = this.pickList;
     objs.length = 0;
-    objs.push(this.hqHit);
-    for (const p of this.plots.values()) objs.push(p.hit);
+    objs.push(this.hqPick || this.hqHit);
+    for (const p of this.plots.values()) {
+      const b = p.building;
+      if (b && b.open && b.pickMesh) objs.push(b.pickMesh);
+      else if (!b && p.ruin && p.ruinPick && !p.demolish) objs.push(p.ruinPick);
+      else {
+        p.hit.scale.y = b || p.demolish ? 9 : 0.8;
+        p.hit.updateMatrixWorld();
+        objs.push(p.hit);
+      }
+    }
     for (const w of this.workers) if (w.char.root.visible && !w.char.offscreen) objs.push(w.char.hit);
     if (this.golden) objs.push(this.goldenObj.hit);
     const hits = this.raycaster.intersectObjects(objs, false);
-    const typed = hits.filter((h) => h.object.userData?.type);
-    const special = typed.find((h) => h.object.userData.type === 'golden') || typed.find((h) => h.object.userData.type === 'worker');
-    if (special) return { ...special.object.userData, point: special.point };
-    if (typed.length) return { ...typed[0].object.userData, point: typed[0].point };
-    return null;
+    const h = hits.find((x) => x.object.userData?.type);
+    return h ? { ...h.object.userData, point: h.point } : null;
   }
 
   handleClick() {
@@ -1313,7 +1432,10 @@ export class Game {
   }
 
   updateHover() {
-    if (this.engine.mobile || this.pointerType === 'touch') { this.hoverFrame.visible = false; return; }
+    const cam = this.engine.controls.cam;
+    this.pointerType = cam.pointerType;
+    if (this.engine.mobile || this.pointerType === 'touch' || cam.gesture) { this.hoverFrame.visible = false; this.emit('hover', null); return; }
+    this.mouse.copy(cam.hover);
     const hit = this.pick();
     let cursor = 'default';
     this.hoverFrame.visible = false;
@@ -1419,7 +1541,7 @@ export class Game {
 
   /** Called right before rendering, after the camera moved. */
   renderPrep() {
-    this.crowd.update(this.camera, this.workers, this.citizens.list);
+    this.crowd.update(this.camera, this.workers, this.citizens.list, this.crew);
   }
 
   setLodScale(scale) {

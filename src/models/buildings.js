@@ -821,126 +821,6 @@ export function buildForSale(zone) {
   return grp;
 }
 
-// ---------------------------------------------------------------------------
-// Construction site: 1) gabarits (profile poles, mise à l'enquête publique)
-//                    2) chantier (fence, scaffolding, crane)
-// ---------------------------------------------------------------------------
-let enqueteTex = null;
-export function buildConstructionSite(color) {
-  const root = new THREE.Group();
-
-  // --- Phase 1: gabarits — the iconic Swiss profile poles ---
-  const gb = new MeshBuilder();
-  const corners = [[-5, -5], [5, -5], [5, 3], [-5, 3]];
-  const h = 7;
-  for (const [x, z] of corners) {
-    gb.box(0.14, h, 0.14, '#f1f3f5', { x, z });
-    for (let k = 0; k < 4; k++) gb.box(0.15, 0.35, 0.15, '#e03131', { x, y: h - 0.35 - k * 0.7, z });
-    gb.box(0.6, 0.1, 0.1, '#f1f3f5', { x, y: h - 0.05, z, ry: Math.PI / 4 });
-  }
-  gb.box(10, 0.06, 0.06, '#e03131', { y: h - 0.2, z: -5 });
-  gb.box(10, 0.06, 0.06, '#e03131', { y: h - 0.2, z: 3 });
-  gb.box(0.06, 0.06, 8, '#e03131', { x: -5, y: h - 0.2, z: -1 });
-  gb.box(0.06, 0.06, 8, '#e03131', { x: 5, y: h - 0.2, z: -1 });
-  const gabarits = gb.build();
-  if (!enqueteTex) {
-    enqueteTex = canvasTexture(256, 192, (g) => {
-      g.fillStyle = '#ffffff'; g.fillRect(0, 0, 256, 192);
-      g.fillStyle = '#e03131'; g.fillRect(0, 0, 256, 50);
-      g.fillStyle = '#ffffff'; g.fillRect(16, 12, 26, 26);
-      g.fillStyle = '#e03131'; g.fillRect(26, 15, 6, 20); g.fillRect(19, 22, 20, 6);
-      g.fillStyle = '#ffffff'; g.font = '900 22px Outfit, Arial'; g.textBaseline = 'middle';
-      g.fillText('AVIS OFFICIEL', 56, 26);
-      g.fillStyle = '#1e2433'; g.font = '800 26px Outfit, Arial'; g.textAlign = 'center';
-      g.fillText('MISE À', 128, 84); g.fillText("L'ENQUÊTE", 128, 114); g.fillText('PUBLIQUE', 128, 144);
-      g.font = '600 15px Outfit, Arial'; g.fillStyle = '#5b6475';
-      g.fillText('Demande de permis de construire', 128, 174);
-    });
-  }
-  const board = new MeshBuilder();
-  board.box(0.12, 1.4, 0.12, '#5b6475', { x: -0.8, mat: 'metal' });
-  board.box(0.12, 1.4, 0.12, '#5b6475', { x: 0.8, mat: 'metal' });
-  const boardG = board.build();
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.42), new THREE.MeshStandardMaterial({ map: enqueteTex, roughness: 0.7 }));
-  plate.position.set(0, 1.7, 0.08);
-  boardG.add(plate);
-  boardG.position.set(-3.6, 0, 5.2);
-  boardG.rotation.y = 0.3;
-  gabarits.add(boardG);
-  root.add(gabarits);
-
-  // --- Phase 2: chantier ---
-  const cb = new MeshBuilder();
-  // fence
-  for (let i = 0; i < 12; i++) {
-    const x = -5.5 + i;
-    cb.box(0.95, 1.1, 0.06, i % 2 ? '#ff922b' : '#f8f9fa', { x: x + 0.5, z: 5.2 });
-  }
-  for (const x of [-6, 6]) cb.box(0.06, 1.1, 11, '#f8f9fa', { x, z: -0.3 });
-  // foundation & site hut (baraque de chantier)
-  cb.box(10, 0.4, 8, '#9aa0a6', { z: -1 });
-  cb.box(3.2, 2.4, 2.2, '#f2f2f2', { x: 3.6, z: 3.2 });
-  cb.box(3.3, 0.2, 2.3, '#495057', { x: 3.6, y: 2.4, z: 3.2 });
-  cb.box(0.9, 0.6, 0.05, '#a5d8ff', { x: 3.0, y: 1.3, z: 4.31, mat: 'lit' });
-  // material piles
-  for (let i = 0; i < 3; i++) cb.box(1.4, 0.25, 0.9, '#c9a46a', { x: -4, y: i * 0.26, z: 3.6 });
-  cb.cone(0.9, 0.9, '#d9c7a1', { x: -2.2, z: 3.8 }, 10);
-  const site = cb.build();
-  root.add(site);
-
-  // scaffolding grows with progress
-  const sb = new MeshBuilder();
-  const levels = 5;
-  for (let l = 0; l < levels; l++) {
-    const y = l * 1.6;
-    for (const [x, z] of [[-4.6, -4.6], [4.6, -4.6], [4.6, 2.6], [-4.6, 2.6], [0, 2.6], [0, -4.6]]) {
-      sb.cyl(0.05, 0.05, 1.6, '#adb5bd', { x, y: y + 0.4, z, mat: 'metal' }, 6);
-    }
-    sb.box(9.4, 0.08, 0.8, '#c08a4a', { y: y + 2.0, z: 3.0 });
-    sb.box(9.4, 0.05, 0.05, '#ff922b', { y: y + 2.8, z: 3.35 });
-    sb.box(0.8, 0.08, 7.4, '#c08a4a', { x: 5.0, y: y + 2.0, z: -1 });
-  }
-  const scaffold = sb.build();
-  root.add(scaffold);
-  // building core rising (grey concrete + building colour band)
-  const core = new MeshBuilder();
-  core.box(8.6, 1, 6.6, '#c5c9ce', {});
-  core.box(8.7, 0.12, 6.7, color, { y: 0.95 });
-  const coreMesh = core.build();
-  coreMesh.position.set(0, 0.4, -1);
-  root.add(coreMesh);
-
-  // tower crane
-  const kb = new MeshBuilder();
-  kb.box(0.6, 14, 0.6, '#ffd43b', { mat: 'metal' });
-  kb.box(1.4, 0.8, 1.4, '#495057', { y: 13.6 });
-  const crane = kb.build();
-  crane.position.set(-5.2, 0, -5.2);
-  const jibB = new MeshBuilder();
-  jibB.box(14, 0.45, 0.45, '#ffd43b', { x: 4, y: 0, mat: 'metal' });
-  jibB.box(2.2, 1.2, 1.0, '#495057', { x: -3.2, y: -1.1 });
-  jibB.cyl(0.02, 0.02, 4.5, '#212529', { x: 8, y: -4.5 }, 4);
-  jibB.box(0.8, 0.5, 0.8, '#868e96', { x: 8, y: -5.1, mat: 'metal' });
-  const jib = jibB.build();
-  jib.position.y = 14.4;
-  crane.add(jib);
-  root.add(crane);
-
-  const update = (progress, t) => {
-    const p1 = progress < 0.3;
-    gabarits.visible = p1;
-    site.visible = scaffold.visible = coreMesh.visible = crane.visible = !p1;
-    if (!p1) {
-      const k = (progress - 0.3) / 0.7;
-      coreMesh.scale.y = Math.max(0.01, k * 7.5);
-      scaffold.scale.y = Math.max(0.05, Math.min(1, 0.25 + k));
-      jib.rotation.y = Math.sin(t * 0.4) * 1.2 + 0.4;
-    }
-  };
-  update(0, 0);
-  return { group: root, update };
-}
-
 export { bush };
 
 // ---------------------------------------------------------------------------
@@ -1003,13 +883,15 @@ function ruinModel(b, seed) {
   for (let i = 0; i < 8; i++) b.box(1.3, 1.2, 0.06, i % 2 ? '#c9c3b8' : '#b0a99c', { x: -5.2 + i * 1.4, z: 4.9, ry: (r() - 0.5) * 0.08, sharp: true });
   b.box(1.4, 0.8, 0.08, '#ffd43b', { x: -3.8, y: 0.3, z: 4.96, r: 0.03 });
   b.box(0.5, 0.5, 0.04, '#e03131', { x: -3.8, y: 0.45, z: 5.01, ry: 0, rz: Math.PI / 4, sharp: true });
+  return wall;
 }
 
 /** Abandoned building: one medium-detail model + shadow proxy. */
 export function buildRuin(seed) {
   const b = new MeshBuilder({ lod: 1 });
-  ruinModel(b, seed);
+  const wall = ruinModel(b, seed);
   const group = b.build();
+  group.userData.wall = wall;
   group.traverse((m) => { if (m.isMesh) m.castShadow = false; });
   const lo = new MeshBuilder({ lod: 2 });
   ruinModel(lo, seed);
@@ -1019,26 +901,3 @@ export function buildRuin(seed) {
   return group;
 }
 
-/** Cartoon excavator used while demolishing; returns { group, arm }. */
-export function buildExcavator() {
-  const b = new MeshBuilder();
-  b.box(3.0, 0.7, 1.0, '#2e3440', { z: -0.9, r: 0.3 });
-  b.box(3.0, 0.7, 1.0, '#2e3440', { z: 0.9, r: 0.3 });
-  for (const z of [-0.9, 0.9]) for (const x of [-1.0, 0, 1.0]) b.cyl(0.28, 0.28, 1.05, '#5f6875', { x, y: 0.35, z: z - 0.52, rx: Math.PI / 2, mat: 'metal' }, 10);
-  b.box(2.6, 1.2, 2.4, '#ffc93c', { y: 0.7, r: 0.25 });
-  b.box(1.3, 1.3, 1.3, '#ffc93c', { x: -0.4, y: 1.9, z: 0.4, r: 0.2 });
-  b.box(1.1, 0.9, 0.06, '#bfe3ff', { x: -0.4, y: 2.15, z: 1.06, mat: 'glass', sharp: true });
-  b.box(0.9, 0.5, 2.0, '#2e3440', { x: 1.0, y: 1.9, r: 0.15 });
-  const body = b.build();
-  const ab = new MeshBuilder();
-  ab.box(0.45, 0.45, 3.2, '#ffc93c', { z: 1.6, r: 0.15 });
-  ab.group({ y: 0, z: 3.2, rx: 0.9 }, () => {
-    ab.box(0.4, 0.4, 2.4, '#ffc93c', { z: 1.2, r: 0.12 });
-    ab.box(0.9, 0.7, 0.6, '#5f6875', { y: -0.35, z: 2.5, r: 0.12, mat: 'metal' });
-  });
-  const arm = ab.build();
-  arm.position.set(-0.2, 1.7, 0.6);
-  const group = new THREE.Group();
-  group.add(body, arm);
-  return { group, arm };
-}

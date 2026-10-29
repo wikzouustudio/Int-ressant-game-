@@ -47,7 +47,8 @@ const BLOCKS = {
     b.box(1.2, 2.2, 0.14, PAL.woodD, { x: W / 2 - 1.4, y: 0.3, z: -1 + D / 2 + 0.05, sharp: true });
     awning(b, { y: 2.85, z: -1 + D / 2 + 0.05, w: W - 1.2, depth: 1.1, colors: ['#ffffff', acc] });
     // roof
-    b.box(W + 0.3, 0.35, D + 0.3, PAL.white, { y: H + 0.3, z: -1, r: 0.12 });
+    b.box(W + 0.3, 0.35, D + 0.3, '#d6d0c6', { y: H + 0.3, z: -1, r: 0.12 });
+    b.box(W - 0.6, 0.06, D - 0.6, '#a9a39a', { y: H + 0.62, z: -1, sharp: true });
     b.box(1.6, 0.9, 1.0, '#f1f3f5', { x: -2.5, y: H + 0.65, z: -2.5, sharp: true });
     if (r() > 0.4) {
       b.cyl(1.0, 1.0, 1.8, '#8a6b4a', { x: 2.6, y: H + 1.1, z: -2.6 }, 10);
@@ -98,7 +99,8 @@ const BLOCKS = {
       }
       y += fh;
     }
-    b.box(8.8, 0.45, 8.8, PAL.white, { y, z: -1, r: 0.15 });
+    b.box(8.8, 0.45, 8.8, '#d6d0c6', { y, z: -1, r: 0.15 });
+    b.box(8.0, 0.06, 8.0, '#a9a39a', { y: y + 0.45, z: -1, sharp: true });
     b.box(0.12, 3, 0.12, '#adb5bd', { x: 2.5, y: y + 0.45, z: -2, sharp: true });
     b.sphere(0.16, '#ff2d2d', { x: 2.5, y: y + 3.5, z: -2, mat: 'neon' }, 6, 4);
   },
@@ -113,7 +115,8 @@ const BLOCKS = {
     b.box(7, 0.35, 0.1, '#ffffff', { y: 3.1, z: 2.38, mat: 'neon', sharp: true });
     awning(b, { y: 2.85, z: 2.2, w: 10.4, depth: 1.2, colors: ['#ffffff', acc] });
     if (H > 4) windowRow(b, 9, 4.6, 2.14, 4, litColor(r), PAL.white);
-    b.box(11.3, 0.3, 7.8, PAL.white, { y: H, z: -1.6, r: 0.1 });
+    b.box(11.3, 0.3, 7.8, '#d6d0c6', { y: H, z: -1.6, r: 0.1 });
+    b.box(10.4, 0.06, 7.0, '#a9a39a', { y: H + 0.3, z: -1.6, sharp: true });
     pot(b, { x: -5, y: 0, z: 3.6, flower: '#ff6b9a' });
     pot(b, { x: 5, y: 0, z: 3.6 });
     bench(b, { x: 0, y: 0, z: 4.2 });
@@ -137,15 +140,79 @@ const BLOCKS = {
   },
 };
 
-const KINDS = ['apartment', 'apartment', 'townhouses', 'tower', 'shop', 'park', 'apartment', 'shop'];
+BLOCKS.market = function market(b, r) {
+  b.box(PAD - 0.6, 0.05, PAD - 0.6, '#d9cbb3', { y: 0.0, sharp: true });
+  const cols = ['#e0573f', '#4b8fd8', '#f2a541', '#3bb3a8', '#e86aa1', '#5fb35a'];
+  for (let k = 0; k < 6; k++) {
+    const x = -3.6 + (k % 3) * 3.6, z = k < 3 ? -2.4 : 2.4;
+    b.group({ x, z, ry: (r() - 0.5) * 0.3 }, () => {
+      b.box(2.4, 0.9, 1.4, '#c98a4b', { r: 0.06 });
+      for (const sx of [-1.1, 1.1]) b.box(0.1, 2.3, 0.1, '#5c4033', { x: sx, z: 0.6, sharp: true });
+      b.box(2.8, 0.12, 1.9, cols[k], { y: 2.3, z: 0.1, rx: 0.15, r: 0.04 });
+      for (let q = 0; q < 6; q++) b.sphere(0.16, ['#ffe135', '#e63946', '#7cbf3f', '#ff922b'][(q + k) % 4], { x: -0.9 + q * 0.36, y: 1.0, z: 0.1 + (q % 2) * 0.25 }, 6, 4);
+    });
+  }
+  bench(b, { x: 0, y: 0, z: 0, ry: r() * 0.5 });
+};
+
+BLOCKS.parking = function parking(b, r) {
+  b.box(PAD - 0.6, 0.05, PAD - 0.6, '#6b7280', { sharp: true });
+  for (let k = 0; k < 6; k++) b.box(0.12, 0.02, 3.2, '#f8f9fa', { x: -4.5 + k * 1.8, y: 0.05, z: -3, sharp: true });
+  for (let k = 0; k < 6; k++) b.box(0.12, 0.02, 3.2, '#f8f9fa', { x: -4.5 + k * 1.8, y: 0.05, z: 3, sharp: true });
+  const cols = ['#e0573f', '#4b8fd8', '#f2c14e', '#f8f9fa', '#2e3440', '#3bb3a8', '#8b5cf6'];
+  for (let k = 0; k < 10; k++) {
+    if (r() < 0.3) continue;
+    const x = -3.6 + (k % 5) * 1.8, z = k < 5 ? -3 : 3;
+    b.group({ x, z, ry: Math.PI / 2 + (r() - 0.5) * 0.1 }, () => {
+      const col = cols[(r() * cols.length) | 0];
+      b.rbox(3.0, 0.75, 1.5, 0.32, col, { y: 0.25, mat: 'soft' });
+      b.rbox(1.7, 0.66, 1.35, 0.3, '#bfe3ff', { x: -0.15, y: 0.88, mat: 'glass' });
+    });
+  }
+  for (const [x, z] of [[-5.2, 0], [5.2, 0]]) b.blob(0.9, '#4ca346', { x, y: 0.7, z }, 1);
+};
+
+BLOCKS.sports = function sports(b, r) {
+  b.box(PAD - 1.2, 0.05, PAD - 2.4, '#4caf50', { sharp: true });
+  for (let k = 0; k < 6; k++) b.box((PAD - 1.2) / 6, 0.052, PAD - 2.4, k % 2 ? '#43a047' : '#4caf50', { x: -(PAD - 1.2) / 2 + (k + 0.5) * ((PAD - 1.2) / 6), sharp: true });
+  b.box(PAD - 1.4, 0.06, 0.1, '#ffffff', { z: (PAD - 2.6) / 2, sharp: true });
+  b.box(PAD - 1.4, 0.06, 0.1, '#ffffff', { z: -(PAD - 2.6) / 2, sharp: true });
+  b.box(0.1, 0.06, PAD - 2.6, '#ffffff', { sharp: true });
+  b.torus(1.2, 0.05, '#ffffff', { y: 0.06, rx: Math.PI / 2 }, Math.PI * 2, 4, 24);
+  for (const x of [-5.6, 5.6]) {
+    b.box(0.1, 1.4, 0.1, '#ffffff', { x, z: -1.1, sharp: true });
+    b.box(0.1, 1.4, 0.1, '#ffffff', { x, z: 1.1, sharp: true });
+    b.box(0.1, 0.1, 2.3, '#ffffff', { x, y: 1.35, sharp: true });
+  }
+  b.sphere(0.25, '#ffffff', { x: (r() - 0.5) * 4, y: 0.3, z: (r() - 0.5) * 3 }, 8, 6);
+};
+
+const KINDS = ['apartment', 'townhouses', 'tower', 'apartment', 'shop', 'park', 'market', 'townhouses', 'apartment', 'parking', 'shop', 'sports', 'tower', 'apartment'];
+const OPEN = ['park', 'market', 'parking', 'sports'];
+
+function corners(b, r) {
+  // a few bushes / small trees in random pad corners: breaks the strict grid
+  for (const [cx, cz] of [[-5.6, -5.6], [5.6, -5.6], [-5.6, 5.6], [5.6, 5.6]]) {
+    if (r() < 0.45) continue;
+    if (r() < 0.5) b.blob(0.5 + r() * 0.5, ['#4ca346', '#3f8f3a', '#6aa84f'][(r() * 3) | 0], { x: cx + (r() - 0.5), y: PAD_Y + 0.35, z: cz + (r() - 0.5), sy: 0.8 }, 1);
+    else {
+      b.cyl(0.14, 0.2, 1.6, '#7a5233', { x: cx, y: PAD_Y, z: cz }, 6);
+      b.blob(1.0 + r() * 0.4, ['#4ca346', '#5cb84a'][(r() * 2) | 0], { x: cx, y: PAD_Y + 2.3, z: cz }, 1);
+    }
+  }
+}
 
 function drawBlock(b, i, j, kind, seed) {
   const r = rng(seed);
   const ry = [0, Math.PI / 2, Math.PI, -Math.PI / 2][(Math.abs(i * 7 + j * 3)) % 4];
+  const open = OPEN.includes(kind);
   b.group({ x: i * CELL, z: j * CELL }, () => {
     b.box(PAD, PAD_Y - 0.02, PAD, '#c4bcad', { sharp: true });
-    if (kind !== 'park') b.box(PAD - 0.7, 0.04, PAD - 0.7, '#d9d3c7', { y: PAD_Y - 0.03, sharp: true });
-    b.group({ y: PAD_Y, ry: kind === 'park' ? 0 : ry }, () => BLOCKS[kind](b, r));
+    if (kind !== 'park') b.box(PAD - 0.7, 0.04, PAD - 0.7, r() < 0.3 && !open ? '#9fc36a' : '#d9d3c7', { y: PAD_Y - 0.03, sharp: true });
+    // buildings sit slightly off-centre and off-axis, like a real city
+    const jitter = open ? { x: 0, z: 0, t: 0 } : { x: (r() - 0.5) * 1.1, z: (r() - 0.5) * 0.9, t: (r() - 0.5) * 0.14 };
+    b.group({ y: kind === 'park' ? 0 : PAD_Y, x: jitter.x, z: jitter.z, ry: kind === 'park' ? 0 : ry + jitter.t, sy: open ? 1 : 0.9 + r() * 0.25 }, () => BLOCKS[kind](b, r));
+    if (!open) corners(b, r);
   });
 }
 

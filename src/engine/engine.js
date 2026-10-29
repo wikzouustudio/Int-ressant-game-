@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CityCamera } from './camera.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -26,18 +26,9 @@ export function createEngine(container) {
   const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.8, 3000);
   camera.position.set(58, 72, 100);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(0, 0, 6);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.minDistance = 18;
-  controls.maxDistance = 260;
-  controls.minPolarAngle = 0.25;
-  controls.maxPolarAngle = 1.28;
-  controls.screenSpacePanning = false;
-  controls.zoomSpeed = 1.1;
-  controls.panSpeed = 1.2;
-  controls.update();
+  const cityCam = new CityCamera(camera, renderer.domElement, CITY_HALF);
+  // `controls` keeps the small surface the rest of the code relies on
+  const controls = { target: cityCam.target, cam: cityCam };
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
@@ -62,41 +53,7 @@ export function createEngine(container) {
   }
   window.addEventListener('resize', resize);
 
-  // Keyboard panning (WASD / arrows)
-  const keys = new Set();
-  window.addEventListener('keydown', (e) => {
-    if (e.target instanceof HTMLInputElement) return;
-    keys.add(e.key.toLowerCase());
-  });
-  window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
-  window.addEventListener('blur', () => keys.clear());
-  const fwd = new THREE.Vector3();
-  const right = new THREE.Vector3();
-  const move = new THREE.Vector3();
-  const boundsMin = new THREE.Vector3(-CITY_HALF, 0, -CITY_HALF);
-  const boundsMax = new THREE.Vector3(CITY_HALF, 0, CITY_HALF);
-
-  function update(dt) {
-    move.set(0, 0, 0);
-    camera.getWorldDirection(fwd);
-    fwd.y = 0; fwd.normalize();
-    right.crossVectors(fwd, camera.up).normalize();
-    if (keys.has('w') || keys.has('z') || keys.has('arrowup')) move.add(fwd);
-    if (keys.has('s') || keys.has('arrowdown')) move.sub(fwd);
-    if (keys.has('d') || keys.has('arrowright')) move.add(right);
-    if (keys.has('a') || keys.has('q') || keys.has('arrowleft')) move.sub(right);
-    if (move.lengthSq() > 0) {
-      const dist = camera.position.distanceTo(controls.target);
-      move.normalize().multiplyScalar(dt * (20 + dist * 0.6));
-      camera.position.add(move);
-      controls.target.add(move);
-    }
-    // keep the camera over the city
-    const before = controls.target.clone();
-    controls.target.clamp(boundsMin, boundsMax);
-    camera.position.add(before.sub(controls.target).negate());
-    controls.update();
-  }
+  function update(dt) { cityCam.update(dt); }
 
   // --- quality tier (see engine/quality.js) ---
   let useComposer = true;
@@ -141,31 +98,11 @@ export function createEngine(container) {
     }
   }
 
-  /** Smoothly fly the camera to focus a point. */
-  let flight = null;
-  function focus(point, distance = 45) {
-    const dir = camera.position.clone().sub(controls.target).normalize();
-    flight = {
-      t: 0,
-      fromT: controls.target.clone(),
-      toT: point.clone(),
-      fromP: camera.position.clone(),
-      toP: point.clone().add(dir.multiplyScalar(distance)),
-    };
-  }
-  function updateFlight(dt) {
-    if (!flight) return;
-    flight.t = Math.min(1, flight.t + dt * 1.6);
-    const k = 1 - Math.pow(1 - flight.t, 3);
-    controls.target.lerpVectors(flight.fromT, flight.toT, k);
-    camera.position.lerpVectors(flight.fromP, flight.toP, k);
-    if (flight.t >= 1) flight = null;
-  }
-  renderer.domElement.addEventListener('pointerdown', () => { flight = null; });
+  function focus(point, maxDistance) { cityCam.focus(point, maxDistance); }
 
   return {
     renderer, scene, camera, controls, composer, bloom, quality, mobile,
-    update(dt) { updateFlight(dt); update(dt); },
+    update,
     render() {
       if (timerExt) pollGpu();
       const q = beginGpu();

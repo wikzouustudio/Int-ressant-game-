@@ -56,5 +56,9 @@ export class Sound {
   golden() {
     [784, 988, 1175, 1568, 1976].forEach((f, i) => this.tone(f, 0.3, { type: 'sine', vol: 0.25, delay: i * 0.06 }));
   }
+  thud() {
+    this.tone(70 + Math.random() * 20, 0.35, { type: 'sine', vol: 0.5, slide: -30 });
+    this.tone(160, 0.12, { type: 'square', vol: 0.08, slide: -90 });
+  }
   whoosh() { this.tone(300, 0.25, { type: 'sine', vol: 0.15, slide: 600 }); }
 }

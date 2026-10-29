@@ -78,8 +78,14 @@ export class UI {
     this.panel.classList.remove('hidden');
     this.render();
     if (target === prev || (prev && prev.hq && target.hq)) return;
-    if (target.plot) this.engine.focus(target.plot.center.clone().setY(2), 55);
-    else if (target.center) this.engine.focus(target.center.clone().setY(2), 55);
+    // Only glide the view when the selection is near the screen edges (or under the panel).
+    const c = (target.plot ? target.plot.center : target.center || null);
+    if (!c) return;
+    const v = c.clone().setY(2).project(this.engine.camera);
+    const panelSide = window.innerWidth > 860 ? 0.25 : 0;
+    if (v.z > 1 || Math.abs(v.x + panelSide) > 0.55 || v.y > 0.55 || v.y < (window.innerWidth > 860 ? -0.7 : -0.1)) {
+      this.engine.focus(c, 150);
+    }
   }
 
   refresh() {

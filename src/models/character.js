@@ -104,6 +104,12 @@ function bodyGeo(b, tier, hs) {
     b.rbox(0.8, 0.22, 0.8, 0.07, '#000', o({ y: 2.62, k: 0.8 }, SHIRT_S));
     b.rbox(0.62, 0.07, 0.32, 0.03, '#000', o({ y: 2.62, z: 0.5, k: 0.65 }, SHIRT_S));
     b.rbox(0.2, 0.12, 0.04, 0.02, '#ffffff', { y: 2.68, z: 0.405 });
+  } else if (tier === 'builder') {
+    // hard hat + hi-vis stripes on the (orange) vest
+    b.rbox(0.82, 0.24, 0.82, 0.12, '#ffd43b', { y: 2.62 });
+    b.rbox(0.92, 0.06, 0.92, 0.03, '#f2b705', { y: 2.6 });
+    b.rbox(0.3, 0.12, 0.06, 0.03, '#f2b705', { y: 2.84, z: 0 });
+    for (const y of [1.35, 1.7]) b.box(0.72, 0.07, 0.4, '#e9ecef', { y, sharp: true });
   } else {
     hair(b, hs);
   }
