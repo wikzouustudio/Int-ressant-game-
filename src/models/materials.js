@@ -28,8 +28,15 @@ export const MATS = {
   neon: new THREE.MeshBasicMaterial({ vertexColors: true, color: new THREE.Color(1.6, 1.6, 1.6) }),
 };
 
+// Invisible material for low-poly shadow proxies: drawn into the shadow map only
+// (no colour or depth writes in the main pass).
+export const SHADOW_PROXY_MAT = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+
+export const crowdUniforms = { uNeon: { value: 0.4 } };
+
 export function setNightLevel(night) {
   MATS.lit.emissiveIntensity = 0.08 + night * 2.4;
   const n = 1.2 + night * 1.2;
   MATS.neon.color.setRGB(n, n, n);
+  crowdUniforms.uNeon.value = 0.4 + night * 1.4;
 }

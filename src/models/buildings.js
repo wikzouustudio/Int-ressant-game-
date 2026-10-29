@@ -1,5 +1,7 @@
 import * as THREE from 'three';
-import { MeshBuilder, rng } from './builder.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { MeshBuilder, rng, disposeObject } from './builder.js';
+import { SHADOW_PROXY_MAT } from './materials.js';
 import { drawIcon } from '../ui/icons.js';
 import {
   PAL, shade, plankBox, win, roundWin, door, stairs, awning, balcony, pergola, ac, pipe, barrel, crate, bin,
@@ -548,20 +550,72 @@ export function easeOutBack(x) {
   return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
 }
 
-export function buildBusiness(typeId, level) {
-  const b = new MeshBuilder();
-  const ctx = { emitters: [], animated: [], extra: [], height: 8, door: null, spots: {} };
-  MODELS[typeId](b, level, ctx);
-  const group = b.build();
-  for (const e of ctx.extra) group.add(e);
-  return { group, emitters: ctx.emitters, animated: ctx.animated, height: ctx.height, door: ctx.door, spots: ctx.spots };
+/** Distances (×quality scale) at which a building switches to LOD 1 and LOD 2. */
+export const BUILDING_LOD = [45, 110];
+
+/**
+ * Builds the three LOD versions of a business plus a low-poly shadow proxy.
+ * Only LOD 0 keeps its animated extras (rocket, lab ring) and gameplay data.
+ */
+export function buildBusiness(typeId, level, lodScale = 1) {
+  const levels = [];
+  let main = null;
+  for (let lod = 0; lod < 3; lod++) {
+    const b = new MeshBuilder({ lod });
+    const ctx = { emitters: [], animated: [], extra: [], height: 8, door: null, spots: {} };
+    MODELS[typeId](b, level, ctx);
+    const g = b.build();
+    g.traverse((m) => { if (m.isMesh) m.castShadow = false; });
+    if (lod === 0) main = ctx;
+    else ctx.extra.forEach((e) => disposeObject(e));
+    levels.push(g);
+  }
+  const lod = new THREE.LOD();
+  lod.addLevel(levels[0], 0);
+  lod.addLevel(levels[1], BUILDING_LOD[0] * lodScale, 0.08);
+  lod.addLevel(levels[2], BUILDING_LOD[1] * lodScale, 0.08);
+  const group = new THREE.Group();
+  group.add(lod, makeShadowProxy(levels[2]));
+  for (const e of main.extra) {
+    e.traverse((m) => { if (m.isMesh && m.name !== 'neon') m.castShadow = true; });
+    group.add(e);
+  }
+  return { group, lod, emitters: main.emitters, animated: main.animated, height: main.height, door: main.door, spots: main.spots };
+}
+
+/** Merge a low-detail model into one invisible mesh that only renders into the shadow map. */
+export function makeShadowProxy(low) {
+  const geos = [];
+  low.traverse((m) => { if (m.isMesh && m.name !== 'neon' && m.name !== 'glass') geos.push(m.geometry); });
+  const proxy = new THREE.Mesh(mergeGeometries(geos, false), SHADOW_PROXY_MAT);
+  proxy.castShadow = true;
+  proxy.receiveShadow = false;
+  proxy.name = 'shadow-proxy';
+  return proxy;
+}
+
+export function setBuildingLodScale(lod, scale) {
+  lod.levels[1].distance = BUILDING_LOD[0] * scale;
+  lod.levels[2].distance = BUILDING_LOD[1] * scale;
 }
 
 // ---------------------------------------------------------------------------
 // Headquarters (bank)
 // ---------------------------------------------------------------------------
 export function buildHQ() {
-  const b = new MeshBuilder();
+  const high = new MeshBuilder();
+  hqModel(high);
+  const group = high.build();
+  group.traverse((m) => { if (m.isMesh) m.castShadow = false; });
+  const low = new MeshBuilder({ lod: 2 });
+  hqModel(low);
+  const lowGroup = low.build();
+  group.add(makeShadowProxy(lowGroup));
+  lowGroup.traverse((m) => { if (m.isMesh) m.geometry.dispose(); });
+  return finishHQ(group);
+}
+
+function hqModel(b) {
   const stone = '#f2ead9';
   const stoneD = '#dccfb4';
   b.box(11.8, 0.6, 9.4, stoneD, { z: -2.0, r: 0.18 });
@@ -618,8 +672,9 @@ export function buildHQ() {
   planter(b, { x: 4.4, y: 0, z: 4.0 }, '#ffd43b');
   lamp(b, { x: -3.4, y: 0, z: 5.6, ry: Math.PI });
   lamp(b, { x: 3.4, y: 0, z: 5.6, ry: Math.PI });
-  const group = b.build();
+}
 
+function finishHQ(group) {
   const tex = makeCoinTexture();
   const gold = new THREE.MeshStandardMaterial({ color: '#f2c14e', metalness: 1, roughness: 0.25 });
   const face = new THREE.MeshStandardMaterial({ map: tex, metalness: 1, roughness: 0.28 });

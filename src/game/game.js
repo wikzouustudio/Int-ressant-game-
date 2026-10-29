@@ -4,11 +4,12 @@ import {
   ROBOT_UPKEEP, FIRST_NAMES, ROBOT_NAMES, DAYS, levelMult, slotsFor, buildCost, upgradeCost, hireCost,
   trainingCost, buildTime, money,
 } from './config.js';
-import { buildBusiness, buildHQ, buildSign, buildForSale, buildConstructionSite, easeOutBack } from '../models/buildings.js';
+import { buildBusiness, buildHQ, buildSign, buildForSale, buildConstructionSite, easeOutBack, setBuildingLodScale } from '../models/buildings.js';
 import { createCharacter, animateCharacter, randomLook } from '../models/character.js';
 import { MeshBuilder, disposeObject } from '../models/builder.js';
 import { Effects } from './fx.js';
 import { Sound } from './audio.js';
+import { CrowdRenderer } from './crowd.js';
 import { ROADS_Z, ROADS_X } from '../world/environment.js';
 import { icon } from '../ui/icons.js';
 
@@ -20,6 +21,7 @@ const LANE_Z = 5.6;        // local z of the walkway lane in front of a building
 const EDGE_X = 47.5;       // where commuters enter / leave the city
 const SPEED_OPEN = 3;      // game minutes per real second while the city works
 const SPEED_CLOSED = 30;   // nights & week-ends fly by
+const _v = new THREE.Vector3();
 const SPOT_X = [0, 1.05, -1.05, 2.1, -2.1, 3.15, -3.15, -4.2].map((x) => x - 0.3);
 
 const lerpAngle = (a, b, t) => {
@@ -45,17 +47,17 @@ class Plot {
 
     const b = new MeshBuilder();
     b.box(PAD, PAD_Y - 0.02, PAD, industrial ? '#aaa397' : '#c4bcad', {});
-    this.group.add(b.build());
+    this.group.add(b.build({ castShadow: false }));
     const g = new MeshBuilder();
     g.box(PAD - 0.7, 0.04, PAD - 0.7, industrial ? '#8f9f4c' : '#5fa83a', { y: PAD_Y - 0.03 });
     for (let k = 0; k < 7; k++) {
       g.sphere(0.12, ['#ffffff', '#ffd43b', '#ff8fab'][k % 3], { x: Math.sin(k * 7.3 + i) * 5, y: PAD_Y + 0.02, z: Math.cos(k * 3.1 + j) * 5, sy: 0.5 }, 6, 4);
     }
-    this.grass = g.build();
+    this.grass = g.build({ castShadow: false });
     this.group.add(this.grass);
     const c = new MeshBuilder();
     c.box(PAD - 0.7, 0.04, PAD - 0.7, industrial ? '#c9c6bf' : '#d9d3c7', { y: PAD_Y - 0.03 });
-    this.concrete = c.build();
+    this.concrete = c.build({ castShadow: false });
     this.group.add(this.concrete);
 
     this.forSale = buildForSale(this.zone);
@@ -119,6 +121,7 @@ class Building {
     game.scene.add(this.root);
     this.emitTimer = Math.random();
     this.anim = null;
+    this.toWorldFn = (v) => this.toWorld(v);
     this.routeLength = this.computeRouteLength();
     this.construction = null;
     plot.building = this;
@@ -153,7 +156,7 @@ class Building {
       this.root.remove(this.model.group);
       disposeObject(this.model.group);
     }
-    this.model = buildBusiness(this.typeId, this.level);
+    this.model = buildBusiness(this.typeId, this.level, this.game.lodScale);
     this.root.add(this.model.group);
     this.makeSign();
     if (animate) this.anim = { t: 0, dur: 0.9 };
@@ -242,15 +245,14 @@ class Building {
       this.model.group.scale.set(1 + (1 - k) * 0.15, Math.max(0.01, s), 1 + (1 - k) * 0.15);
       if (k >= 1) { this.model.group.scale.set(1, 1, 1); this.anim = null; }
     }
-    for (const fn of this.model.animated) fn(t, dt, this.game.fx, (v) => this.toWorld(v));
-    const busy = this.workers.some((w) => w.active);
-    if (this.model.emitters.length && busy) {
+    for (const fn of this.model.animated) fn(t, dt, this.game.fx, this.toWorldFn);
+    if (this.model.emitters.length && this.workers.some((w) => w.active)) {
       this.emitTimer -= dt;
       if (this.emitTimer <= 0) {
         this.emitTimer = 0.35;
         const dark = this.typeId === 'factory';
         for (const e of this.model.emitters) {
-          this.game.fx.puff(this.toWorld(e.clone()), {
+          this.game.fx.puff(this.toWorld(_v.copy(e)), {
             color: dark ? '#b8bcc2' : '#eef0f2', size: dark ? 1.1 : 0.7, life: 3.2, up: 1.6, spread: 0.3, radial: 0.8, grow: 2.2,
           });
         }
@@ -270,6 +272,7 @@ class Worker {
     this.game = game;
     this.building = building;
     this.data = data;
+    this.uid = ++Worker.nextId;
     data.days ??= 0;
     this.slot = slot;
     this.state = 'home';
@@ -307,7 +310,6 @@ class Worker {
       this.game.scene.remove(this.char.root);
       disposeObject(this.char.root);
     }
-    c.root.traverse((o) => { if (o.isMesh) o.castShadow = o.material.visible !== false && o.name !== 'neon'; });
     this.char = c;
     this.game.scene.add(c.root);
   }
@@ -460,6 +462,15 @@ class Worker {
     this.planTask(0);
   }
 
+  /** Pose only what can be seen: hidden or off-screen NPCs skip skeletal animation,
+   *  far ones animate every other frame (movement itself is always simulated). */
+  anim(mode, t, phase) {
+    const c = this.char;
+    if (!c.root.visible || c.offscreen) return;
+    if (c.lod && (this.game.frame + this.uid) % 2) return;
+    animateCharacter(c, mode, t, phase);
+  }
+
   update(dt, t) {
     const g = this.game;
     const c = this.char;
@@ -476,12 +487,12 @@ class Worker {
         return;
       case 'task': {
         if (this.paused) {
-          animateCharacter(c, 'coffee', t + this.phase, 0);
+          this.anim('coffee', t + this.phase, 0);
           break;
         }
         this.timer += dt * bmul;
         this.yaw = this.taskYaw;
-        animateCharacter(c, this.task.anim, t * bmul + this.phase, 0);
+        this.anim(this.task.anim, t * bmul + this.phase, 0);
         if (this.timer >= this.taskDuration(this.taskIndex)) {
           const next = this.taskIndex + 1;
           if (next < this.building.biz.tasks.length) this.planTask(next);
@@ -492,7 +503,7 @@ class Worker {
       case 'deposit': {
         this.timer += dt;
         this.yaw = Math.PI;
-        animateCharacter(c, 'cheer', t + this.phase, 0);
+        this.anim('cheer', t + this.phase, 0);
         if (this.timer > 0.65) {
           if (this.human && !onShift) this.goHome(true);
           else {
@@ -507,7 +518,7 @@ class Worker {
         // walking states: move, toHQ, toWork, commuteIn, commuteOut
         const speed = this.tier.speed * g.speedMult * bmul;
         this.walkPhase += dt * speed * 2.0;
-        animateCharacter(c, this.state === 'toHQ' ? 'carry' : 'walk', t, this.walkPhase);
+        this.anim(this.state === 'toHQ' ? 'carry' : 'walk', t, this.walkPhase);
         if (this.followPath(dt, speed)) {
           const s = this.state;
           if (s === 'move') { this.state = 'task'; this.timer = 0; }
@@ -534,6 +545,7 @@ class Worker {
     disposeObject(this.char.root);
   }
 }
+Worker.nextId = 0;
 
 // ===========================================================================
 export class Game {
@@ -544,6 +556,11 @@ export class Game {
     this.env = env;
     this.fx = new Effects(this.scene, this.camera, fxLayer);
     this.sound = new Sound();
+    this.crowd = new CrowdRenderer(this.scene);
+    this.lodScale = 1;
+    this.activeCount = 0;
+    this.humansOnSite = false;
+    this.pickList = [];
     this.listeners = {};
 
     this.canton = null;
@@ -769,7 +786,7 @@ export class Game {
   updateClock(dt) {
     const hour = this.hour;
     const wd = this.weekday;
-    const humansOnSite = this.workers.some((w) => w.human && w.active);
+    const humansOnSite = this.humansOnSite;
     const officeHours = wd < 5 && hour >= 7 && hour < 18;
     const target = humansOnSite || officeHours || this.rush > 0 ? SPEED_OPEN : SPEED_CLOSED;
     this.clockSpeed += (target - this.clockSpeed) * Math.min(1, dt * 3);
@@ -1040,11 +1057,12 @@ export class Game {
     pad.box(PAD, PAD_Y - 0.02, PAD, '#c4bcad', {});
     pad.box(PAD - 0.7, 0.04, PAD - 0.7, '#e8e1d2', { y: PAD_Y - 0.03 });
     for (let k = 0; k < 6; k++) pad.box(PAD - 0.7, 0.045, 0.06, '#cfc6b5', { y: PAD_Y - 0.03, z: 1 + k * 1.0 });
-    const padMesh = pad.build();
+    const padMesh = pad.build({ castShadow: false });
     this.scene.add(padMesh, group);
     const hit = new THREE.Mesh(new THREE.BoxGeometry(12, 14, 13).translate(0, 7, -0.5), new THREE.MeshBasicMaterial({ visible: false }));
     hit.userData = { type: 'hq' };
     group.add(hit);
+    this.hqHit = hit;
     this.hqSign = buildSign('SIÈGE', 'Empire SA', '#f2c14e', 'bank');
     this.hqSign.position.set(-5.2, 0, 5.6);
     this.hqSign.rotation.y = 0.35;
@@ -1157,11 +1175,13 @@ export class Game {
 
   pick() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const objs = [this.hq];
+    const objs = this.pickList;
+    objs.length = 0;
+    objs.push(this.hqHit);
     for (const p of this.plots.values()) objs.push(p.hit);
-    for (const w of this.workers) if (w.char.root.visible) objs.push(w.char.hit);
+    for (const w of this.workers) if (w.char.root.visible && !w.char.offscreen) objs.push(w.char.hit);
     if (this.golden) objs.push(this.goldenObj.hit);
-    const hits = this.raycaster.intersectObjects(objs, true);
+    const hits = this.raycaster.intersectObjects(objs, false);
     const typed = hits.filter((h) => h.object.userData?.type);
     const special = typed.find((h) => h.object.userData.type === 'golden') || typed.find((h) => h.object.userData.type === 'worker');
     if (special) return { ...special.object.userData, point: special.point };
@@ -1218,6 +1238,12 @@ export class Game {
     this.stats.playTime += dt;
     this.frame++;
     const t = this.time;
+    if (this.frame % 10 === 0) {
+      let n = 0, humans = false;
+      for (const w of this.workers) if (w.active) { n++; if (w.human) humans = true; }
+      this.activeCount = n;
+      this.humansOnSite = humans;
+    }
     this.updateClock(dt);
 
     for (const b of this.buildings.values()) b.update(dt, t);
@@ -1258,7 +1284,7 @@ export class Game {
     if (this.rush > 0) {
       this.rush -= dt;
       if (this.rush <= 0) this.emit('rush', false);
-    } else if (this.workers.filter((w) => w.active).length >= 3) {
+    } else if (this.activeCount >= 3) {
       this.nextRush -= dt;
       if (this.nextRush <= 0) {
         this.rush = 25;
@@ -1274,6 +1300,16 @@ export class Game {
       this.checkMilestones();
     }
     if (this.frame % 4 === 0) this.updateHover();
+  }
+
+  /** Called right before rendering, after the camera moved. */
+  renderPrep() {
+    this.crowd.update(this.workers, this.camera);
+  }
+
+  setLodScale(scale) {
+    this.lodScale = scale;
+    for (const b of this.buildings.values()) if (b.model?.lod) setBuildingLodScale(b.model.lod, scale);
   }
 
   isFrontier(p) {

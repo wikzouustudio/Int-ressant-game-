@@ -6,11 +6,12 @@ const HAIR = ['#2b1d14', '#4a2f1b', '#8b5a2b', '#e0b85a', '#b8461f', '#141414', 
 const PANTS = ['#2d3a4f', '#3b3b46', '#5a4636', '#1f2937', '#4b5563'];
 const HAIRSTYLES = ['short', 'long', 'bun', 'spiky', 'bald', 'short'];
 
-function shade(hex, f) {
-  const c = new THREE.Color(hex);
-  c.multiplyScalar(f);
-  return '#' + c.getHexString();
-}
+// Colour slots resolved per instance in the crowd shader (see game/crowd.js)
+const SKIN_S = { slot: 1 };
+const HAIR_S = { slot: 2 };
+const SHIRT_S = { slot: 3 };
+const PANTS_S = { slot: 4 };
+const ACCENT_S = { slot: 5 };
 
 export function randomLook(seed, tierId, bizColor) {
   const r = rng(seed);
@@ -28,170 +29,177 @@ export function randomLook(seed, tierId, bizColor) {
   };
 }
 
-/**
- * Builds a stylised, chunky character (~2.6 units tall) with pivoted limbs.
- * Returns { root, body, armL, armR, legL, legR, bag, hit }.
- */
-export function createCharacter(look) {
+/** Per-instance colours (linear RGB): skin, hair, shirt, pants, accent. */
+export function lookColors(look) {
   const robot = look.tier === 'robot';
-  const root = new THREE.Group();
-  const pivot = new THREE.Group(); // bobbing / leaning
-  root.add(pivot);
+  const list = [look.skin, look.hair, robot ? look.robotPaint : look.shirt, look.pants, robot ? look.eye : look.tie];
+  const out = new Float32Array(15);
+  const c = new THREE.Color();
+  list.forEach((hex, i) => { c.set(hex); out[i * 3] = c.r; out[i * 3 + 1] = c.g; out[i * 3 + 2] = c.b; });
+  return out;
+}
 
-  const skin = look.skin;
-  const metal = look.robotPaint;
-  const sleeve = look.tier === 'expert' ? '#1f2937' : look.shirt;
-  const torsoColor = look.tier === 'expert' ? '#1f2937' : look.shirt;
+const o = (base, extra) => ({ ...extra, ...base });
 
-  // ---------- body ----------
-  const b = new MeshBuilder();
-  if (robot) {
-    b.rbox(0.9, 0.86, 0.6, 0.18, metal, { y: 0.95, mat: 'metal' });
+// ---------------------------------------------------------------------------
+// Geometry templates (shared by every NPC of the same kind)
+// ---------------------------------------------------------------------------
+function bodyGeo(b, tier, hs) {
+  if (tier === 'robot') {
+    b.rbox(0.9, 0.86, 0.6, 0.18, '#000', o({ y: 0.95, mat: 'metal' }, SHIRT_S));
     b.cyl(0.32, 0.32, 0.05, '#1f2937', { y: 1.4, z: 0.29, rx: Math.PI / 2 });
-    b.sphere(0.16, look.eye, { y: 1.42, z: 0.31, sz: 0.4, mat: 'neon' });
+    b.sphere(0.16, '#000', o({ y: 1.42, z: 0.31, sz: 0.4, mat: 'neon' }, ACCENT_S));
     b.cyl(0.14, 0.14, 0.2, '#6b7280', { y: 1.78, mat: 'metal' });
-    b.rbox(0.84, 0.72, 0.74, 0.2, metal, { y: 1.92, mat: 'metal' });
+    b.rbox(0.84, 0.72, 0.74, 0.2, '#000', o({ y: 1.92, mat: 'metal' }, SHIRT_S));
     b.rbox(0.7, 0.24, 0.1, 0.05, '#0b1220', { y: 2.2, z: 0.35 });
-    b.box(0.5, 0.08, 0.05, look.eye, { y: 2.28, z: 0.41, mat: 'neon' });
+    b.box(0.5, 0.08, 0.05, '#000', o({ y: 2.28, z: 0.41, mat: 'neon' }, ACCENT_S));
     b.cyl(0.03, 0.03, 0.45, '#9ca3af', { y: 2.62, mat: 'metal' });
     b.sphere(0.09, '#ff3b3b', { y: 3.1, mat: 'neon' });
     b.cyl(0.12, 0.12, 0.12, '#6b7280', { x: 0.46, y: 2.2, rz: Math.PI / 2, mat: 'metal' });
     b.cyl(0.12, 0.12, 0.12, '#6b7280', { x: -0.34, y: 2.2, rz: Math.PI / 2, mat: 'metal' });
-  } else {
-    b.rbox(0.86, 0.84, 0.54, 0.16, torsoColor, { y: 0.95 });
-    b.box(0.88, 0.1, 0.56, '#2a2a2a', { y: 0.95 });
-    b.box(0.14, 0.08, 0.04, '#d4af37', { y: 0.96, z: 0.28, mat: 'gold' });
-    b.cyl(0.15, 0.17, 0.2, skin, { y: 1.74 });
-    // head
-    b.sphere(0.46, skin, { y: 2.22 }, 20, 16);
-    b.sphere(0.09, skin, { x: -0.45, y: 2.2, sx: 0.5 });
-    b.sphere(0.09, skin, { x: 0.45, y: 2.2, sx: 0.5 });
-    // face
-    b.sphere(0.065, '#1b1b1b', { x: -0.16, y: 2.27, z: 0.41, sz: 0.5 }, 10, 8);
-    b.sphere(0.065, '#1b1b1b', { x: 0.16, y: 2.27, z: 0.41, sz: 0.5 }, 10, 8);
-    b.sphere(0.022, '#ffffff', { x: -0.14, y: 2.3, z: 0.445 }, 6, 4);
-    b.sphere(0.022, '#ffffff', { x: 0.18, y: 2.3, z: 0.445 }, 6, 4);
-    b.box(0.1, 0.035, 0.03, '#1b1b1b', { x: -0.16, y: 2.4, z: 0.42 });
-    b.box(0.1, 0.035, 0.03, '#1b1b1b', { x: 0.16, y: 2.4, z: 0.42 });
-    b.sphere(0.07, shade(skin, 0.88), { y: 2.16, z: 0.45, sz: 0.7 }, 8, 6);
-    b.box(0.16, 0.035, 0.03, '#8a3b3b', { y: 2.03, z: 0.43 });
-    b.sphere(0.075, '#ff9b9b', { x: -0.27, y: 2.12, z: 0.36, sz: 0.35 }, 8, 6);
-    b.sphere(0.075, '#ff9b9b', { x: 0.27, y: 2.12, z: 0.36, sz: 0.35 }, 8, 6);
-
-    // hair
-    const hs = look.hairStyle;
-    if (hs !== 'bald' && look.tier !== 'apprentice') {
-      b.sphere(0.49, look.hair, { y: 2.24, z: -0.03, rx: -0.45 }, 20, 12, Math.PI * 0.52);
-      if (hs === 'long') b.rbox(0.86, 0.75, 0.3, 0.12, look.hair, { y: 1.72, z: -0.26 });
-      if (hs === 'bun') b.sphere(0.2, look.hair, { y: 2.74, z: -0.22 });
-      if (hs === 'spiky') {
-        for (let i = 0; i < 5; i++) {
-          b.cone(0.12, 0.3, look.hair, { x: -0.28 + i * 0.14, y: 2.58, z: -0.05, rx: -0.4 }, 5);
-        }
-      }
-    } else if (hs === 'long' && look.tier === 'apprentice') {
-      b.rbox(0.82, 0.6, 0.28, 0.12, look.hair, { y: 1.8, z: -0.27 });
-    }
-
-    if (look.tier === 'apprentice') {
-      // company cap
-      b.sphere(0.5, shade(look.shirt, 0.8), { y: 2.26, rx: -0.25 }, 20, 10, Math.PI * 0.48);
-      b.box(0.62, 0.05, 0.42, shade(look.shirt, 0.7), { y: 2.42, z: 0.42, rx: -0.12 });
-      b.sphere(0.06, '#ffffff', { y: 2.75, z: -0.04 }, 8, 6);
-    }
-    if (look.tier === 'employee') {
-      b.box(0.44, 0.12, 0.06, '#ffffff', { y: 1.66, z: 0.25 });
-      b.box(0.12, 0.5, 0.05, look.tie, { y: 1.16, z: 0.28 });
-      b.box(0.18, 0.12, 0.05, look.tie, { y: 1.62, z: 0.28 });
-      b.box(0.18, 0.06, 0.03, '#ffffff', { x: 0.24, y: 1.5, z: 0.27 });
-    }
-    if (look.tier === 'expert') {
-      b.box(0.3, 0.62, 0.04, '#f8fafc', { y: 1.15, z: 0.26 });
-      b.box(0.1, 0.48, 0.05, look.tie, { y: 1.2, z: 0.285 });
-      // glasses
-      b.torus(0.11, 0.02, '#111827', { x: -0.16, y: 2.27, z: 0.44 }, Math.PI * 2, 6, 16);
-      b.torus(0.11, 0.02, '#111827', { x: 0.16, y: 2.27, z: 0.44 }, Math.PI * 2, 6, 16);
-      b.box(0.1, 0.02, 0.02, '#111827', { y: 2.29, z: 0.45 });
-      b.box(0.12, 0.08, 0.02, '#d4af37', { x: -0.26, y: 1.55, z: 0.275, mat: 'gold' });
-    }
+    return;
   }
-  const body = b.build();
-  pivot.add(body);
-
-  // ---------- arms ----------
-  const makeArm = (side) => {
-    const a = new MeshBuilder();
-    if (robot) {
-      a.sphere(0.16, '#6b7280', { y: -0.02, mat: 'metal' }, 10, 8);
-      a.cyl(0.1, 0.1, 0.62, metal, { y: -0.68, mat: 'metal' }, 10);
-      a.sphere(0.15, '#374151', { y: -0.72, mat: 'metal' }, 10, 8);
-    } else {
-      a.rbox(0.26, 0.6, 0.28, 0.1, sleeve, { y: -0.6 });
-      if (look.tier === 'expert') a.box(0.24, 0.06, 0.26, '#f8fafc', { y: -0.62 });
-      a.sphere(0.14, skin, { y: -0.72 }, 12, 10);
+  const torso = tier === 'expert' ? { c: '#1f2937', s: {} } : { c: '#000', s: SHIRT_S };
+  b.rbox(0.86, 0.84, 0.54, 0.16, torso.c, o({ y: 0.95 }, torso.s));
+  b.box(0.88, 0.1, 0.56, '#2a2a2a', { y: 0.95 });
+  b.box(0.14, 0.08, 0.04, '#d4af37', { y: 0.96, z: 0.28, mat: 'gold' });
+  b.cyl(0.15, 0.17, 0.2, '#000', o({ y: 1.74 }, SKIN_S));
+  // head
+  b.sphere(0.46, '#000', o({ y: 2.22 }, SKIN_S), 20, 16);
+  b.sphere(0.09, '#000', o({ x: -0.45, y: 2.2, sx: 0.5 }, SKIN_S));
+  b.sphere(0.09, '#000', o({ x: 0.45, y: 2.2, sx: 0.5 }, SKIN_S));
+  // face
+  b.sphere(0.065, '#1b1b1b', { x: -0.16, y: 2.27, z: 0.41, sz: 0.5 }, 10, 8);
+  b.sphere(0.065, '#1b1b1b', { x: 0.16, y: 2.27, z: 0.41, sz: 0.5 }, 10, 8);
+  b.sphere(0.022, '#ffffff', { x: -0.14, y: 2.3, z: 0.445 }, 6, 4);
+  b.sphere(0.022, '#ffffff', { x: 0.18, y: 2.3, z: 0.445 }, 6, 4);
+  b.box(0.1, 0.035, 0.03, '#1b1b1b', { x: -0.16, y: 2.4, z: 0.42 });
+  b.box(0.1, 0.035, 0.03, '#1b1b1b', { x: 0.16, y: 2.4, z: 0.42 });
+  b.sphere(0.07, '#000', o({ y: 2.16, z: 0.45, sz: 0.7, k: 0.88 }, SKIN_S), 8, 6);
+  b.box(0.16, 0.035, 0.03, '#8a3b3b', { y: 2.03, z: 0.43 });
+  b.sphere(0.075, '#ff9b9b', { x: -0.27, y: 2.12, z: 0.36, sz: 0.35 }, 8, 6);
+  b.sphere(0.075, '#ff9b9b', { x: 0.27, y: 2.12, z: 0.36, sz: 0.35 }, 8, 6);
+  // hair
+  if (hs !== 'bald' && tier !== 'apprentice') {
+    b.sphere(0.49, '#000', o({ y: 2.24, z: -0.03, rx: -0.45 }, HAIR_S), 20, 12, Math.PI * 0.52);
+    if (hs === 'long') b.rbox(0.86, 0.75, 0.3, 0.12, '#000', o({ y: 1.72, z: -0.26 }, HAIR_S));
+    if (hs === 'bun') b.sphere(0.2, '#000', o({ y: 2.74, z: -0.22 }, HAIR_S));
+    if (hs === 'spiky') {
+      for (let i = 0; i < 5; i++) b.cone(0.12, 0.3, '#000', o({ x: -0.28 + i * 0.14, y: 2.58, z: -0.05, rx: -0.4 }, HAIR_S), 5);
     }
+  } else if (hs === 'long' && tier === 'apprentice') {
+    b.rbox(0.82, 0.6, 0.28, 0.12, '#000', o({ y: 1.8, z: -0.27 }, HAIR_S));
+  }
+  if (tier === 'apprentice') {
+    b.sphere(0.5, '#000', o({ y: 2.26, rx: -0.25, k: 0.8 }, SHIRT_S), 20, 10, Math.PI * 0.48);
+    b.box(0.62, 0.05, 0.42, '#000', o({ y: 2.42, z: 0.42, rx: -0.12, k: 0.7 }, SHIRT_S));
+    b.sphere(0.06, '#ffffff', { y: 2.75, z: -0.04 }, 8, 6);
+  }
+  if (tier === 'employee') {
+    b.box(0.44, 0.12, 0.06, '#ffffff', { y: 1.66, z: 0.25 });
+    b.box(0.12, 0.5, 0.05, '#000', o({ y: 1.16, z: 0.28 }, ACCENT_S));
+    b.box(0.18, 0.12, 0.05, '#000', o({ y: 1.62, z: 0.28 }, ACCENT_S));
+    b.box(0.18, 0.06, 0.03, '#ffffff', { x: 0.24, y: 1.5, z: 0.27 });
+  }
+  if (tier === 'expert') {
+    b.box(0.3, 0.62, 0.04, '#f8fafc', { y: 1.15, z: 0.26 });
+    b.box(0.1, 0.48, 0.05, '#000', o({ y: 1.2, z: 0.285 }, ACCENT_S));
+    b.torus(0.11, 0.02, '#111827', { x: -0.16, y: 2.27, z: 0.44 }, Math.PI * 2, 6, 16);
+    b.torus(0.11, 0.02, '#111827', { x: 0.16, y: 2.27, z: 0.44 }, Math.PI * 2, 6, 16);
+    b.box(0.1, 0.02, 0.02, '#111827', { y: 2.29, z: 0.45 });
+    b.box(0.12, 0.08, 0.02, '#d4af37', { x: -0.26, y: 1.55, z: 0.275, mat: 'gold' });
+  }
+}
+
+function armGeo(b, tier) {
+  if (tier === 'robot') {
+    b.sphere(0.16, '#6b7280', { y: -0.02, mat: 'metal' }, 10, 8);
+    b.cyl(0.1, 0.1, 0.62, '#000', o({ y: -0.68, mat: 'metal' }, SHIRT_S), 10);
+    b.sphere(0.15, '#374151', { y: -0.72, mat: 'metal' }, 10, 8);
+    return;
+  }
+  if (tier === 'expert') b.rbox(0.26, 0.6, 0.28, 0.1, '#1f2937', { y: -0.6 });
+  else b.rbox(0.26, 0.6, 0.28, 0.1, '#000', o({ y: -0.6 }, SHIRT_S));
+  if (tier === 'expert') b.box(0.24, 0.06, 0.26, '#f8fafc', { y: -0.62 });
+  b.sphere(0.14, '#000', o({ y: -0.72 }, SKIN_S), 12, 10);
+}
+
+function legGeo(b, tier) {
+  if (tier === 'robot') {
+    b.cyl(0.13, 0.13, 0.72, '#6b7280', { y: -0.8, mat: 'metal' }, 10);
+    b.rbox(0.36, 0.22, 0.5, 0.08, '#000', o({ y: -1.0, z: 0.06, mat: 'metal' }, SHIRT_S));
+    return;
+  }
+  b.rbox(0.33, 0.8, 0.35, 0.1, '#000', o({ y: -0.82 }, PANTS_S));
+  b.rbox(0.36, 0.2, 0.52, 0.08, tier === 'expert' ? '#111111' : '#f5f5f5', { y: -1.0, z: 0.07 });
+  b.box(0.37, 0.05, 0.53, '#3a3a3a', { y: -1.0, z: 0.07 });
+}
+
+const PROPS = {
+  bag(b) {
+    b.sphere(0.34, '#c8a165', { y: -0.98, z: 0.12, sy: 0.92 }, 14, 10);
+    b.cyl(0.1, 0.16, 0.16, '#a07a45', { y: -0.72, z: 0.12 }, 10);
+    b.torus(0.11, 0.035, '#6b4f2a', { y: -0.67, z: 0.12, rx: Math.PI / 2 }, Math.PI * 2, 6, 12);
+    b.box(0.16, 0.2, 0.04, '#2f855a', { y: -1.08, z: 0.44 });
+    b.cyl(0.11, 0.11, 0.04, '#f5c542', { x: 0.08, y: -0.62, z: 0.1, rz: 0.4, mat: 'gold' }, 12);
+  },
+  cup(b) {
+    b.cyl(0.11, 0.09, 0.22, '#ffffff', { y: -0.86, z: 0.12, mat: 'soft' }, 10);
+    b.cyl(0.095, 0.095, 0.02, '#6b3f1f', { y: -0.65, z: 0.12 }, 10);
+  },
+  phone(b) {
+    b.rbox(0.1, 0.32, 0.04, 0.02, '#111827', { y: -0.9, z: 0.1, mat: 'soft' });
+    b.box(0.08, 0.26, 0.01, '#60a5fa', { y: -0.87, z: 0.125, mat: 'neon' });
+  },
+  cloth(b) {
+    b.box(0.3, 0.04, 0.24, '#60a5fa', { y: -0.84, z: 0.08 });
+  },
+};
+
+const templates = new Map();
+/**
+ * Shared geometry for a character part.
+ * key: 'body:<tier>:<hair>' | 'arm:<tier>' | 'leg:<tier>' | 'bag' | 'cup' | 'phone' | 'cloth'
+ * lod: 0 (near) or 2 (far)
+ */
+export function partGeometry(key, lod) {
+  const id = key + '|' + lod;
+  if (templates.has(id)) return templates.get(id);
+  const b = new MeshBuilder({ lod, extra: true });
+  const [part, tier, hair] = key.split(':');
+  if (part === 'body') bodyGeo(b, tier, hair);
+  else if (part === 'arm') armGeo(b, tier);
+  else if (part === 'leg') legGeo(b, tier);
+  else PROPS[part](b);
+  const g = b.buildGeometry();
+  if (g) g.userData.shared = true;
+  templates.set(id, g);
+  return g;
+}
+
+// ---------------------------------------------------------------------------
+// Rig: lightweight Object3D skeleton animated on the CPU, drawn by the crowd renderer
+// ---------------------------------------------------------------------------
+export function createCharacter(look) {
+  const root = new THREE.Group();
+  const pivot = new THREE.Group(); // bobbing / leaning
+  root.add(pivot);
+  const node = (x, y, parent = pivot) => {
     const g = new THREE.Group();
-    g.add(a.build());
-    g.position.set(side * 0.55, 1.7, 0);
+    g.position.set(x, y, 0);
+    parent.add(g);
     return g;
   };
-  const armL = makeArm(-1);
-  const armR = makeArm(1);
-  pivot.add(armL, armR);
+  const armL = node(-0.55, 1.7);
+  const armR = node(0.55, 1.7);
+  const legL = node(-0.21, 1.0);
+  const legR = node(0.21, 1.0);
+  const bag = node(0, 0, armR);
+  const cup = node(0, 0, armL);
+  const phone = node(0, 0, armR);
+  const cloth = node(0, 0, armR);
+  bag.visible = cup.visible = phone.visible = cloth.visible = false;
 
-  // ---------- legs ----------
-  const makeLeg = (side) => {
-    const l = new MeshBuilder();
-    if (robot) {
-      l.cyl(0.13, 0.13, 0.72, '#6b7280', { y: -0.8, mat: 'metal' }, 10);
-      l.rbox(0.36, 0.22, 0.5, 0.08, metal, { y: -1.0, z: 0.06, mat: 'metal' });
-    } else {
-      l.rbox(0.33, 0.8, 0.35, 0.1, look.pants, { y: -0.82 });
-      l.rbox(0.36, 0.2, 0.52, 0.08, look.tier === 'expert' ? '#111111' : '#f5f5f5', { y: -1.0, z: 0.07 });
-      l.box(0.37, 0.05, 0.53, '#3a3a3a', { y: -1.0, z: 0.07 });
-    }
-    const g = new THREE.Group();
-    g.add(l.build());
-    g.position.set(side * 0.21, 1.0, 0);
-    return g;
-  };
-  const legL = makeLeg(-1);
-  const legR = makeLeg(1);
-  pivot.add(legL, legR);
-
-  // ---------- money bag (carried in right hand) ----------
-  const bagB = new MeshBuilder();
-  bagB.sphere(0.34, '#c8a165', { y: -0.98, z: 0.12, sy: 0.92 }, 14, 10);
-  bagB.cyl(0.1, 0.16, 0.16, '#a07a45', { y: -0.72, z: 0.12 }, 10);
-  bagB.torus(0.11, 0.035, '#6b4f2a', { y: -0.67, z: 0.12, rx: Math.PI / 2 }, Math.PI * 2, 6, 12);
-  bagB.box(0.16, 0.2, 0.04, '#2f855a', { y: -1.08, z: 0.44 });
-  bagB.cyl(0.11, 0.11, 0.04, '#f5c542', { x: 0.08, y: -0.62, z: 0.1, rz: 0.4, mat: 'gold' }, 12);
-  const bag = bagB.build();
-  bag.visible = false;
-  armR.add(bag);
-
-  // ---------- props ----------
-  const cupB = new MeshBuilder();
-  cupB.cyl(0.11, 0.09, 0.22, '#ffffff', { y: -0.86, z: 0.12, mat: 'soft' }, 10);
-  cupB.cyl(0.095, 0.095, 0.02, '#6b3f1f', { y: -0.65, z: 0.12 }, 10);
-  const cup = cupB.build({ castShadow: false });
-  cup.visible = false;
-  armL.add(cup);
-
-  const phoneB = new MeshBuilder();
-  phoneB.rbox(0.1, 0.32, 0.04, 0.02, '#111827', { y: -0.9, z: 0.1, mat: 'soft' });
-  phoneB.box(0.08, 0.26, 0.01, '#60a5fa', { y: -0.87, z: 0.125, mat: 'neon' });
-  const phone = phoneB.build({ castShadow: false });
-  phone.visible = false;
-  armR.add(phone);
-
-  const clothB = new MeshBuilder();
-  clothB.box(0.3, 0.04, 0.24, '#60a5fa', { y: -0.84, z: 0.08 });
-  const cloth = clothB.build({ castShadow: false });
-  cloth.visible = false;
-  armR.add(cloth);
-
-  // Invisible hit volume for picking
   const hit = new THREE.Mesh(
     new THREE.BoxGeometry(1.5, 3, 1.5).translate(0, 1.5, 0),
     new THREE.MeshBasicMaterial({ visible: false })
@@ -199,7 +207,13 @@ export function createCharacter(look) {
   hit.material.userData.owned = true;
   root.add(hit);
 
-  return { root, pivot, body, armL, armR, legL, legR, bag, cup, phone, cloth, hit };
+  const t = look.tier;
+  const parts = [
+    [pivot, `body:${t}:${t === 'robot' ? '-' : look.hairStyle}`],
+    [armL, `arm:${t}`], [armR, `arm:${t}`], [legL, `leg:${t}`], [legR, `leg:${t}`],
+    [bag, 'bag'], [cup, 'cup'], [phone, 'phone'], [cloth, 'cloth'],
+  ];
+  return { root, pivot, armL, armR, legL, legR, bag, cup, phone, cloth, hit, parts, colors: lookColors(look), lod: 0, animSkip: 0 };
 }
 
 const still = (c) => {

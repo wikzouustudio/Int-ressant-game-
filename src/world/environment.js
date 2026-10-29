@@ -190,43 +190,85 @@ export function createEnvironment(engine) {
     tryPlace(Math.cos(a) * d * 1.05, 6 + Math.sin(a) * d);
   }
 
-  const trunkGeo = new THREE.CylinderGeometry(0.28, 0.42, 2.6, 10).translate(0, 1.3, 0);
-  const crownGeo = mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]]);
-  const pineGeo = new THREE.ConeGeometry(1.9, 5.5, 14).translate(0, 4.4, 0);
-  const pine2Geo = new THREE.ConeGeometry(1.4, 3.6, 14).translate(0, 6.6, 0);
+  // Vegetation is split into spatial cells (one set of InstancedMeshes per cell) so each
+  // cell can be frustum-culled, switched to a low-poly LOD and hidden beyond the draw distance.
+  const geos = {
+    trunk: [new THREE.CylinderGeometry(0.28, 0.42, 2.6, 10).translate(0, 1.3, 0), new THREE.CylinderGeometry(0.28, 0.42, 2.6, 5).translate(0, 1.3, 0)],
+    crown: [mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]], 2),
+      mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]], 1)],
+    pine: [new THREE.ConeGeometry(1.9, 5.5, 14).translate(0, 4.4, 0), new THREE.ConeGeometry(1.9, 5.5, 6).translate(0, 4.4, 0)],
+    pine2: [new THREE.ConeGeometry(1.4, 3.6, 14).translate(0, 6.6, 0), new THREE.ConeGeometry(1.4, 3.6, 6).translate(0, 6.6, 0)],
+  };
   const trunkMat = new THREE.MeshStandardMaterial({ color: '#7a5233', roughness: 1 });
   const leafMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 });
   const nRound = Math.floor(treeSpots.length * 0.55);
-  const nPine = treeSpots.length - nRound;
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, treeSpots.length);
-  const crowns = new THREE.InstancedMesh(crownGeo, leafMat, nRound);
-  const pines = new THREE.InstancedMesh(pineGeo, leafMat, nPine);
-  const pines2 = new THREE.InstancedMesh(pine2Geo, leafMat, nPine);
   const leafColors = ['#3f8f3a', '#4ca346', '#5cb84a', '#2f7a35', '#7cbf3f', '#3a7d44'];
   const pineColors = ['#2d6a4f', '#1b4332', '#40916c', '#2f5d3a'];
+  const CHUNK = 110;
+  const chunkMap = new Map();
   treeSpots.forEach(([x, z], i) => {
     const s = 0.8 + r() * 0.9;
     dummy.position.set(x, heightAt(x, z) - 0.1, z);
     dummy.rotation.set(0, r() * Math.PI * 2, 0);
     dummy.scale.set(s, s * (0.9 + r() * 0.3), s);
     dummy.updateMatrix();
-    trunks.setMatrixAt(i, dummy.matrix);
-    if (i < nRound) {
-      crowns.setMatrixAt(i, dummy.matrix);
-      crowns.setColorAt(i, new THREE.Color(leafColors[Math.floor(r() * leafColors.length)]));
-    } else {
-      const k = i - nRound;
-      pines.setMatrixAt(k, dummy.matrix);
-      pines2.setMatrixAt(k, dummy.matrix);
-      const pc = new THREE.Color(pineColors[Math.floor(r() * pineColors.length)]);
-      pines.setColorAt(k, pc);
-      pines2.setColorAt(k, pc.clone().multiplyScalar(1.12));
-    }
+    const round = i < nRound;
+    const color = new THREE.Color(round ? leafColors[Math.floor(r() * leafColors.length)] : pineColors[Math.floor(r() * pineColors.length)]);
+    const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
+    if (!chunkMap.has(key)) chunkMap.set(key, []);
+    chunkMap.get(key).push({ m: dummy.matrix.clone(), round, color });
   });
-  for (const m of [trunks, crowns, pines, pines2]) {
-    m.castShadow = true;
-    m.receiveShadow = true;
-    root.add(m);
+  const vegetation = [];
+  for (const trees of chunkMap.values()) {
+    const rounds = trees.filter((t) => t.round);
+    const pinesL = trees.filter((t) => !t.round);
+    const meshes = [];
+    const make = (kind, list, mat, colorMul = 1) => {
+      if (!list.length) return;
+      const m = new THREE.InstancedMesh(geos[kind][0], mat, list.length);
+      list.forEach((t, k) => {
+        m.setMatrixAt(k, t.m);
+        if (mat === leafMat) m.setColorAt(k, colorMul === 1 ? t.color : t.color.clone().multiplyScalar(colorMul));
+      });
+      m.computeBoundingSphere();
+      m.castShadow = true;
+      m.receiveShadow = true;
+      m.userData.kind = kind;
+      root.add(m);
+      meshes.push(m);
+    };
+    make('trunk', trees, trunkMat);
+    make('crown', rounds, leafMat);
+    make('pine', pinesL, leafMat);
+    make('pine2', pinesL, leafMat, 1.12);
+    const center = new THREE.Vector3();
+    trees.forEach((t) => center.add(new THREE.Vector3().setFromMatrixPosition(t.m)));
+    center.divideScalar(trees.length);
+    let radius = 0;
+    trees.forEach((t) => { radius = Math.max(radius, center.distanceTo(new THREE.Vector3().setFromMatrixPosition(t.m))); });
+    // trees far from the city never fall inside the (view-fitted) shadow frustum
+    const nearCity = center.length() - radius < 120;
+    meshes.forEach((m) => { m.castShadow = nearCity; });
+    vegetation.push({ meshes, center, radius, low: false, visible: true });
+  }
+  const vegStats = { chunks: vegetation.length, visible: 0, low: 0 };
+  let vegDist = 600;
+  function updateVegetation(camPos) {
+    let vis = 0, low = 0;
+    for (const c of vegetation) {
+      const d = Math.hypot(c.center.x - camPos.x, c.center.z - camPos.z) - c.radius;
+      const visible = d < vegDist;
+      // hysteresis band so cells do not flip back and forth
+      const wantLow = c.low ? d > 150 : d > 170;
+      if (visible !== c.visible) { c.visible = visible; c.meshes.forEach((m) => { m.visible = visible; }); }
+      if (wantLow !== c.low) {
+        c.low = wantLow;
+        c.meshes.forEach((m) => { m.geometry = geos[m.userData.kind][wantLow ? 1 : 0]; });
+      }
+      if (visible) { vis++; if (c.low) low++; }
+    }
+    vegStats.visible = vis;
+    vegStats.low = low;
   }
 
   // Bushes & flowers lining the city edge
@@ -313,7 +355,40 @@ export function createEnvironment(engine) {
   const tmp = new THREE.Color();
   let night = 0;
 
-  function update(dt, tod, time) {
+  // ---------------- Shadows fitted to the view ----------------
+  // The shadow frustum follows the camera focus and shrinks when zooming in, so the
+  // same map resolution gives sharper shadows and far, off-screen casters are culled.
+  let shadowRange = 1;
+  let frame = 0;
+  const focusSnap = new THREE.Vector3();
+  function fitShadows(focus, camDist) {
+    const half = Math.min(78, Math.max(26, Math.round((camDist * 0.62 * shadowRange) / 4) * 4));
+    const texel = (2 * half) / sun.shadow.mapSize.x;
+    focusSnap.set(Math.round(focus.x / texel) * texel, 0, Math.round(focus.z / texel) * texel);
+    sun.target.position.copy(focusSnap);
+    if (sc.right !== half) {
+      sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half;
+      sc.updateProjectionMatrix();
+    }
+  }
+
+  function setShadowQuality(size, soft, range) {
+    shadowRange = range;
+    const typeChanged = renderer.shadowMap.type !== (soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap);
+    renderer.shadowMap.type = soft ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+    if (sun.shadow.mapSize.x !== size) {
+      sun.shadow.mapSize.set(size, size);
+      if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+    }
+    if (typeChanged) scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); });
+  }
+
+  function update(dt, tod, time, view) {
+    frame++;
+    if (view) {
+      fitShadows(view.focus, view.distance);
+      if (frame % 15 === 0) updateVegetation(view.camera);
+    }
     // tod: 0..1, 0.25 sunrise, 0.5 noon, 0.75 sunset (biased toward day)
     const a = (tod - 0.25) * Math.PI * 2;
     const elev = Math.sin(a) * 62 + 14; // degrees
@@ -365,7 +440,12 @@ export function createEnvironment(engine) {
     waterMat.color.setHSL(0.55, 0.6, 0.38 + Math.sin(time * 0.8) * 0.01);
   }
 
-  return { update, sun, get night() { return night; } };
+  return {
+    update, sun, setShadowQuality, vegStats,
+    setVegetationDistance(d) { vegDist = d; frame = 14; },
+    setClouds(on) { clouds.forEach((c) => { c.visible = on; }); },
+    get night() { return night; },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -394,9 +474,9 @@ function mergeBoxes(list) {
   return out;
 }
 
-function mergeBlobs(list) {
+function mergeBlobs(list, detail = 2) {
   const geos = list.map(([x, y, z, r]) => {
-    const g = new THREE.IcosahedronGeometry(r, 2);
+    const g = new THREE.IcosahedronGeometry(r, detail);
     g.translate(x, y, z);
     return g;
   });

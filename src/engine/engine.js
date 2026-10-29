@@ -95,13 +95,47 @@ export function createEngine(container) {
     controls.update();
   }
 
-  function setQuality(high) {
-    quality.high = high;
-    renderer.shadowMap.enabled = true;
-    bloom.enabled = high;
-    renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio, 2) : 1);
-    composer.setPixelRatio(renderer.getPixelRatio());
+  // --- quality tier (see engine/quality.js) ---
+  let useComposer = true;
+  function applyTier(t) {
+    quality.high = t.bloom;
+    const dpr = Math.min(window.devicePixelRatio || 1, t.maxDpr);
+    renderer.setPixelRatio(dpr);
+    composer.setPixelRatio(dpr);
+    bloom.enabled = t.bloom;
+    useComposer = t.bloom || t.aa > 0;
+    for (const target of [composer.renderTarget1, composer.renderTarget2]) {
+      if (target.samples !== t.aa) { target.samples = t.aa; target.dispose(); }
+    }
     resize();
+  }
+
+  // --- GPU timing (only where EXT_disjoint_timer_query_webgl2 is exposed) ---
+  const gl = renderer.getContext();
+  const timerExt = gl.getExtension && gl.getExtension('EXT_disjoint_timer_query_webgl2');
+  const queries = [];
+  const gpu = { ms: null, supported: !!timerExt };
+  function beginGpu() {
+    if (!timerExt || queries.length > 3) return null;
+    const q = gl.createQuery();
+    gl.beginQuery(timerExt.TIME_ELAPSED_EXT, q);
+    return q;
+  }
+  function endGpu(q) {
+    if (!q) return;
+    gl.endQuery(timerExt.TIME_ELAPSED_EXT);
+    queries.push(q);
+  }
+  function pollGpu() {
+    while (queries.length) {
+      const q = queries[0];
+      if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
+      const disjoint = gl.getParameter(timerExt.GPU_DISJOINT_EXT);
+      const ns = gl.getQueryParameter(q, gl.QUERY_RESULT);
+      if (!disjoint) gpu.ms = gpu.ms == null ? ns / 1e6 : gpu.ms * 0.9 + (ns / 1e6) * 0.1;
+      gl.deleteQuery(q);
+      queries.shift();
+    }
   }
 
   /** Smoothly fly the camera to focus a point. */
@@ -129,7 +163,12 @@ export function createEngine(container) {
   return {
     renderer, scene, camera, controls, composer, bloom, quality, mobile,
     update(dt) { updateFlight(dt); update(dt); },
-    render() { composer.render(); },
-    setQuality, focus,
+    render() {
+      if (timerExt) pollGpu();
+      const q = beginGpu();
+      if (useComposer) composer.render(); else renderer.render(scene, camera);
+      endGpu(q);
+    },
+    applyTier, focus, gpu,
   };
 }

@@ -3,6 +3,7 @@ import {
   levelMult, slotsFor, money, fmt, pct, buildTime,
 } from '../game/config.js';
 import { icon } from './icons.js';
+import { TIERS } from '../engine/quality.js';
 
 const $ = (id) => document.getElementById(id);
 const sumCharges = (c) => c.avs + c.ac + c.lpp + c.laa + c.af;
@@ -408,12 +409,26 @@ export class UI {
   }
 
   openSettings() {
-    const q = this.engine.quality.high;
+    const q = this.quality;
+    const tierBtn = (mode, label, sub) => {
+      const on = q && q.mode === mode;
+      return `<button class="btn ${on ? 'gold' : 'locked'}" data-action="q-mode" data-mode="${mode}">${label}<small>${sub}</small></button>`;
+    };
+    const cur = q ? TIERS[q.tier].name : '';
     this.openModal(`<h2>${icon('gear', 'title')} Paramètres</h2><p>La partie est sauvegardée automatiquement dans ton navigateur.</p>
-      <div class="section-title">Graphismes</div>
+      <div class="section-title"><span>Qualité graphique</span><span>actuelle : ${cur}</span></div>
+      <div class="settings-row q5">
+        ${tierBtn('auto', 'Auto', 'adaptée à l\'appareil')}
+        ${TIERS.map((t, i) => tierBtn(i, t.name, ['Économie', 'Équilibré', 'Beau', 'Maximum'][i])).join('')}
+      </div>
+      <div class="section-title">Images par seconde</div>
       <div class="settings-row">
-        <button class="btn ${q ? 'gold' : 'locked'}" data-action="q-high">${icon('star', 'inline')} Haute qualité</button>
-        <button class="btn ${!q ? 'gold' : 'locked'}" data-action="q-low">${icon('bolt', 'inline')} Performance</button>
+        <button class="btn ${q?.fpsCap === 60 ? 'gold' : 'locked'}" data-action="q-fps" data-fps="60">60 FPS<small>fluide</small></button>
+        <button class="btn ${q?.fpsCap === 30 ? 'gold' : 'locked'}" data-action="q-fps" data-fps="30">30 FPS<small>moins de chauffe et de batterie</small></button>
+      </div>
+      <div class="section-title">Diagnostic</div>
+      <div class="settings-row">
+        <button class="btn ${this.overlay?.enabled ? 'gold' : 'locked'}" data-action="q-perf">${icon('stats', 'inline')} Statistiques de performance</button>
       </div>
       <div class="section-title">Sauvegarde</div>
       <div class="settings-row">
@@ -441,8 +456,9 @@ export class UI {
       this.closeModal();
       this.showTutorial(g.tutorial);
     } else if (a === 'upg') { g.buyUpgrade(btn.dataset.id); if (g.upgrades.has(btn.dataset.id)) this.openResearch(); }
-    else if (a === 'q-high') { this.engine.setQuality(true); this.openSettings(); }
-    else if (a === 'q-low') { this.engine.setQuality(false); this.openSettings(); }
+    else if (a === 'q-mode') { const m = btn.dataset.mode; this.quality.setMode(m === 'auto' ? 'auto' : +m); this.openSettings(); }
+    else if (a === 'q-fps') { this.quality.setFpsCap(+btn.dataset.fps); this.openSettings(); }
+    else if (a === 'q-perf') { this.overlay.toggle(!this.overlay.enabled); this.openSettings(); }
     else if (a === 'save') { g.save(); this.toast('Partie sauvegardée', 'check', 'success'); }
     else if (a === 'reset') {
       if (confirm('Effacer ta progression et recommencer à zéro ?')) g.reset();
