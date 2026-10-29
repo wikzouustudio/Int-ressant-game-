@@ -127,7 +127,7 @@ export class CrowdRenderer {
     const cam = camera.position;
     const D = this.lodDistance;
     for (const list of lists) for (const w of list) {
-      const c = w.char;
+      const c = w.char || w;
       if (!c.root.visible) continue;
       const p = c.root.position;
       _sphere.center.set(p.x, p.y + 1.4, p.z);

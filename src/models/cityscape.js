@@ -82,8 +82,8 @@ const BLOCKS = {
     for (let k = 0; k < 3; k++) b.blob(0.6, PAL.green, { x: -4.5 + k * 4.5, y: 0.5, z: 3.8 }, 1);
   },
 
-  tower(b, r) {
-    const floors = 7 + ((r() * 7) | 0);
+  tower(b, r, cbd) {
+    const floors = cbd ? 12 + ((r() * 11) | 0) : 7 + ((r() * 7) | 0);
     const fh = 1.8;
     const lit = litColor(r);
     b.box(9.4, 0.4, 9.4, '#cfd4da', { z: -1, r: 0.15 });
@@ -187,8 +187,73 @@ BLOCKS.sports = function sports(b, r) {
   b.sphere(0.25, '#ffffff', { x: (r() - 0.5) * 4, y: 0.3, z: (r() - 0.5) * 3 }, 8, 6);
 };
 
-const KINDS = ['apartment', 'townhouses', 'tower', 'apartment', 'shop', 'park', 'market', 'townhouses', 'apartment', 'parking', 'shop', 'sports', 'tower', 'apartment'];
-const OPEN = ['park', 'market', 'parking', 'sports'];
+BLOCKS.warehouse = function warehouse(b, r) {
+  const wall = ['#c9c3b8', '#b8c4cc', '#d6c9b0', '#a9b4bf'][(r() * 4) | 0];
+  b.box(11.4, 5.5, 9, wall, { z: -1.4, r: 0.15 });
+  for (let x = -5.2; x <= 5.2; x += 0.6) b.box(0.05, 5.2, 0.04, shade(wall, 0.85), { x, y: 0.2, z: 3.11, sharp: true });
+  for (let k = 0; k < 3; k++) b.prism(11.4, 1.4, 3, '#8a94a3', { y: 5.5, z: -4.4 + k * 3 });
+  for (let k = 0; k < 3; k++) b.box(11, 0.9, 0.06, '#cfe8ff', { y: 5.6, z: -3.4 + k * 3, mat: 'lit', sharp: true });
+  for (const x of [-3.4, 0, 3.4]) {
+    b.box(2.8, 3.0, 0.12, '#5d6b7a', { x, y: 0, z: 3.12, r: 0.04 });
+    b.box(3.0, 0.9, 1.4, '#6b7280', { x, y: 0, z: 3.8, r: 0.06 });
+  }
+  b.box(4, 0.6, 0.3, '#e0573f', { x: -3, y: 4.4, z: 3.15, r: 0.1 });
+  if (r() < 0.6) {
+    b.group({ x: 3.2, z: 5.6, ry: Math.PI / 2 }, () => {
+      b.rbox(5.4, 2.4, 2.2, 0.15, '#f1f3f5', { x: -0.8, y: 0.6 });
+      b.rbox(1.6, 2.0, 2.1, 0.3, '#4b8fd8', { x: 2.6, y: 0.6 });
+      for (const x of [-2.6, -1.2, 2.6]) for (const z of [-0.95, 0.95]) b.cyl(0.42, 0.42, 0.3, '#22262d', { x, y: 0.42, z: z - Math.sign(z) * 0.15, rx: Math.PI / 2 }, 10);
+    });
+  }
+};
+
+BLOCKS.containers = function containers(b, r) {
+  b.box(PAD - 0.6, 0.05, PAD - 0.6, '#8d939b', { sharp: true });
+  const cols = ['#e0573f', '#4b8fd8', '#f2a541', '#3bb3a8', '#8b5cf6', '#5fb35a', '#c9c3b8'];
+  for (let row = 0; row < 3; row++) {
+    for (let k = 0; k < 2; k++) {
+      const h = 1 + ((r() * 3) | 0);
+      for (let lvl = 0; lvl < h; lvl++) {
+        const c = cols[(r() * cols.length) | 0];
+        b.box(5.2, 1.25, 2.1, c, { x: -2.8 + k * 5.6, y: lvl * 1.28, z: -4 + row * 2.6, r: 0.06 });
+        for (let q = 0; q < 8; q++) b.box(0.05, 1.1, 2.12, shade(c, 0.78), { x: -5.1 + k * 5.6 + q * 0.6 + 0.3, y: lvl * 1.28 + 0.08, z: -4 + row * 2.6, sharp: true });
+      }
+    }
+  }
+  // gantry crane
+  for (const x of [-5.8, 5.8]) b.box(0.4, 7.5, 0.4, '#ffc93c', { x, z: 3.6, r: 0.1 });
+  b.box(12.2, 0.6, 0.6, '#ffc93c', { y: 7.5, z: 3.6, r: 0.12 });
+  b.box(1.2, 0.8, 1.0, '#495057', { x: (r() - 0.5) * 8, y: 6.7, z: 3.6, r: 0.1 });
+};
+
+BLOCKS.plaza = function plaza(b, r) {
+  b.box(PAD - 0.6, 0.06, PAD - 0.6, '#e3dccd', { sharp: true });
+  for (let k = 0; k < 6; k++) b.box(PAD - 0.6, 0.065, 0.05, '#cfc6b5', { z: -5 + k * 2, sharp: true });
+  b.cyl(2.6, 2.8, 0.55, '#d6d0c6', {}, 28);
+  b.cyl(2.3, 2.3, 0.08, '#5cc8f0', { y: 0.48, mat: 'soft' }, 28);
+  b.box(0.9, 3.5, 0.9, '#9aa4b1', { y: 0.5, r: 0.2, mat: 'metal' });
+  b.sphere(0.6, '#f2c14e', { y: 4.5, mat: 'gold' }, 14, 10);
+  for (const [x, z] of [[-4.6, -4.6], [4.6, -4.6], [-4.6, 4.6], [4.6, 4.6]]) {
+    b.box(2.2, 0.08, 2.2, '#c9c3b8', { x, z, sharp: true });
+    b.box(1.9, 0.1, 1.9, '#7cbc4f', { x, z, sharp: true });
+    b.cyl(0.16, 0.22, 1.8, '#7a5233', { x, z }, 6);
+    b.blob(1.2, '#4ca346', { x, y: 2.6, z }, 1);
+  }
+  for (const a of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) bench(b, { x: Math.sin(a) * 3.9, z: Math.cos(a) * 3.9, ry: a + Math.PI });
+};
+
+const DISTRICTS = {
+  cbd: ['tower', 'tower', 'plaza', 'tower', 'tower', 'shop', 'tower'],
+  residential: ['townhouses', 'apartment', 'townhouses', 'park', 'apartment', 'sports', 'townhouses', 'market', 'apartment'],
+  industrial: ['warehouse', 'containers', 'warehouse', 'parking', 'warehouse', 'containers'],
+};
+/** North = business district, south = residential, east / west = industrial. */
+export function districtOf(i, j) {
+  if (j <= -(GRID + 1)) return 'cbd';
+  if (j >= GRID + 1) return 'residential';
+  return 'industrial';
+}
+const OPEN = ['park', 'market', 'parking', 'sports', 'containers', 'plaza'];
 
 function corners(b, r) {
   // a few bushes / small trees in random pad corners: breaks the strict grid
@@ -205,7 +270,7 @@ function corners(b, r) {
   }
 }
 
-function drawBlock(b, i, j, kind, seed) {
+function drawBlock(b, i, j, kind, seed, cbd) {
   const r = rng(seed);
   const ry = [0, Math.PI / 2, Math.PI, -Math.PI / 2][(Math.abs(i * 7 + j * 3)) % 4];
   const open = OPEN.includes(kind);
@@ -214,7 +279,7 @@ function drawBlock(b, i, j, kind, seed) {
     if (kind !== 'park') b.box(PAD - 0.7, 0.04, PAD - 0.7, r() < 0.3 && !open ? '#9fc36a' : '#d9d3c7', { y: PAD_Y - 0.03, sharp: true });
     // buildings sit slightly off-centre and off-axis, like a real city
     const jitter = open ? { x: 0, z: 0, t: 0 } : { x: (r() - 0.5) * 1.1, z: (r() - 0.5) * 0.9, t: (r() - 0.5) * 0.14 };
-    b.group({ y: kind === 'park' ? 0 : PAD_Y, x: jitter.x, z: jitter.z, ry: kind === 'park' ? 0 : ry + jitter.t, sy: open ? 1 : 0.9 + r() * 0.25 }, () => BLOCKS[kind](b, r));
+    b.group({ y: kind === 'park' ? 0 : PAD_Y, x: jitter.x, z: jitter.z, ry: kind === 'park' ? 0 : ry + jitter.t, sy: open ? 1 : 0.9 + r() * 0.25 }, () => BLOCKS[kind](b, r, cbd));
     if (!open) corners(b, r);
   });
 }
@@ -229,16 +294,18 @@ export function buildCityscape() {
       const key = `${Math.floor((i + N) / 4)},${Math.floor((j + N) / 4)}`;
       if (!chunks.has(key)) chunks.set(key, []);
       const seed = (i + 50) * 977 + (j + 50) * 131;
-      chunks.get(key).push([i, j, KINDS[seed % KINDS.length], seed]);
+      const dist = districtOf(i, j);
+      const kinds = DISTRICTS[dist];
+      chunks.get(key).push([i, j, kinds[seed % kinds.length], seed, dist === 'cbd']);
     }
   }
   let blocks = 0;
   for (const cells of chunks.values()) {
     const hi = new MeshBuilder({ lod: 1 });
     const lo = new MeshBuilder({ lod: 2 });
-    for (const [i, j, kind, seed] of cells) {
-      drawBlock(hi, i, j, kind, seed);
-      drawBlock(lo, i, j, kind, seed);
+    for (const [i, j, kind, seed, cbd] of cells) {
+      drawBlock(hi, i, j, kind, seed, cbd);
+      drawBlock(lo, i, j, kind, seed, cbd);
       blocks++;
     }
     const g = hi.build();

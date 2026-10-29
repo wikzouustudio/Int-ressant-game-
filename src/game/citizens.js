@@ -21,7 +21,7 @@ class Citizen {
     this.ix = (Math.random() * N) | 0;
     this.iz = (Math.random() * N) | 0;
     this.dir = [0, 0];
-    this.side = (Math.random() < 0.5 ? -1 : 1) * (0.35 + Math.random() * 0.5);
+    this.side = (Math.random() < 0.5 ? -1 : 1) * (2.25 + Math.random() * 0.5); // on a sidewalk
     this.speed = 2.1 + Math.random() * 1.2;
     this.phase = Math.random() * 10;
     this.walk = 0;

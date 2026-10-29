@@ -14,29 +14,39 @@
     <div id="fx-layer"></div>
 
     <header id="hud">
-      <div class="brand">
-        <div class="logo" data-icon="swiss"></div>
-        <div class="brand-text"><b>EMPIRE SA</b><small>Tycoon 3D · Suisse</small></div>
-      </div>
-      <div class="money-card">
-        <div class="cash" id="cash">CHF 0</div>
-        <div class="rate"><span id="rate">+CHF 0/s</span><span id="rush-badge" class="rush-badge hidden">x2</span></div>
-      </div>
-      <div class="chips">
-        <div class="chip" title="Employés"><i data-icon="team"></i><b id="st-workers">0</b></div>
-        <div class="chip" title="Commerces"><i data-icon="building"></i><b id="st-buildings">0</b></div>
-        <div class="chip wide" title="Date et heure"><i id="st-clock-icon"></i><b id="st-clock">Lun 08:00</b><small id="st-week">Sem. 1</small><span id="st-open" class="open-tag">Ouvert</span></div>
-        <div class="chip" title="Canton du siège"><i data-icon="shield"></i><b id="st-canton">—</b></div>
-      </div>
-      <nav class="actions">
-        <button id="btn-research" class="btn-main"><i data-icon="bulb"></i><em>Recherche</em><i id="research-dot" class="dot hidden"></i></button>
-        <button id="btn-fidu" class="btn-alt" title="Fiduciaire (comptabilité)"><i data-icon="receipt"></i><em>Fiduciaire</em><i id="fidu-dot" class="dot hidden"></i></button>
-        <button id="btn-law" title="Cadre légal suisse"><i data-icon="scale"></i></button>
-        <button id="btn-stats" title="Statistiques"><i data-icon="stats"></i></button>
-        <button id="btn-sound" title="Son"></button>
-        <button id="btn-settings" title="Paramètres"><i data-icon="gear"></i></button>
-      </nav>
+      <section class="hud-left">
+        <div class="brand">
+          <div class="logo" data-icon="swiss"></div>
+          <div class="brand-text"><b>EMPIRE SA</b><small><i data-icon="shield"></i><span id="st-canton">—</span> · Tycoon suisse</small></div>
+        </div>
+        <div class="mini-stats">
+          <div class="chip" title="Employés"><i data-icon="team"></i><b id="st-workers">0</b><small>employés</small></div>
+          <div class="chip" title="Commerces"><i data-icon="building"></i><b id="st-buildings">0</b><small>commerces</small></div>
+        </div>
+      </section>
+      <section class="hud-center">
+        <div class="money-card">
+          <div class="cash" id="cash">CHF 0</div>
+          <div class="rate"><span id="rate">+CHF 0/s</span><span id="rush-badge" class="rush-badge hidden">x2</span></div>
+        </div>
+        <div class="time-card" title="Date et heure">
+          <i id="st-clock-icon"></i>
+          <div><b id="st-clock">Lun 08:00</b><small id="st-week">Sem. 1</small></div>
+          <span id="st-open" class="open-tag">Ouvert</span>
+        </div>
+      </section>
+      <section class="hud-right">
+        <button id="btn-sound" class="round" title="Son"></button>
+        <button id="btn-settings" class="round" title="Paramètres"><i data-icon="gear"></i></button>
+      </section>
     </header>
+
+    <nav id="dock">
+      <button id="btn-research" class="dock-btn violet"><i data-icon="bulb"></i><span>Recherche</span><i id="research-dot" class="dot hidden"></i></button>
+      <button id="btn-fidu" class="dock-btn teal"><i data-icon="receipt"></i><span>Fiduciaire</span><i id="fidu-dot" class="dot hidden"></i></button>
+      <button id="btn-law" class="dock-btn gold"><i data-icon="scale"></i><span>Lois</span></button>
+      <button id="btn-stats" class="dock-btn blue"><i data-icon="stats"></i><span>Stats</span></button>
+    </nav>
 
     <aside id="panel" class="panel hidden"></aside>
     <div id="modal" class="modal hidden"><div class="modal-card" id="modal-card"></div></div>

@@ -2,10 +2,9 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { MeshBuilder, rng } from '../models/builder.js';
 import { setNightLevel } from '../models/materials.js';
-import { CELL, GRID, DECOR, ROAD_Y, CITY_HALF, PLAY_HALF } from '../game/config.js';
+import { CELL, GRID, DECOR, ROAD_Y, CITY_HALF, PLAY_HALF, ROAD_W, CARRIAGE, isMainRoad } from '../game/config.js';
 import { buildCityscape } from '../models/cityscape.js';
 
-const ROAD_W = CELL - 13;
 const LAMP_RY = -Math.PI / 4;
 // Road grid lines (x = const and z = const), covering the playable district and the
 // decorative rings around it. Both arrays include the outer boundary roads.
@@ -115,26 +114,63 @@ export function createEnvironment(engine) {
   ground.receiveShadow = true;
   root.add(ground);
 
-  // ---------------- Walkways (paved) ----------------
+  // ---------------- Streets: asphalt carriageways, raised sidewalks, markings ----------------
   const paveTex = makePavingTexture(renderer);
-  const wb = [];
-  const addStrip = (x, z, w, d) => {
-    const g = new THREE.BoxGeometry(w, ROAD_Y, d);
-    g.translate(x, ROAD_Y / 2, z);
-    wb.push(g);
-  };
   const span = 2 * CITY_HALF + ROAD_W;
+  const H_ASPH = 0.06;
+  const asphMain = [], asphSec = [], walks = [], curbs = [], marks = [];
+  const box = (list, x, y, z, w, h, d) => {
+    const g = new THREE.BoxGeometry(w, h, d);
+    g.translate(x, y + h / 2, z);
+    list.push(g);
+  };
+  const half = ROAD_W / 2, ch = CARRIAGE / 2, sw = (ROAD_W - CARRIAGE) / 2;
   for (const v of ROADS) {
-    addStrip(0, v, span, ROAD_W);
-    addStrip(v, 0, ROAD_W, span);
+    const main = isMainRoad(v);
+    box(main ? asphMain : asphSec, 0, 0, v, span, H_ASPH, CARRIAGE);
+    box(main ? asphMain : asphSec, v, 0, 0, CARRIAGE, H_ASPH, span);
   }
-  const roadsGeo = mergeBoxes(wb);
-  const pos = roadsGeo.attributes.position;
-  const uv = roadsGeo.attributes.uv;
-  for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / 3, pos.getZ(i) / 3);
-  const roads = new THREE.Mesh(roadsGeo, new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.9, color: '#ffffff' }));
-  roads.receiveShadow = true;
-  root.add(roads);
+  // sidewalks run between intersections; corner squares join them
+  for (const v of ROADS) {
+    for (let k = 0; k < ROADS.length - 1; k++) {
+      const a0 = ROADS[k] + ch, a1 = ROADS[k + 1] - ch, len = a1 - a0, mid = (a0 + a1) / 2;
+      for (const side of [-1, 1]) {
+        const off = v + side * (ch + sw / 2);
+        box(walks, mid, 0, off, len, ROAD_Y, sw);
+        box(walks, off, 0, mid, sw, ROAD_Y, len);
+        box(curbs, mid, 0, v + side * (ch + 0.06), len, ROAD_Y + 0.02, 0.12);
+        box(curbs, v + side * (ch + 0.06), 0, mid, 0.12, ROAD_Y + 0.02, len);
+      }
+    }
+  }
+  for (const x of ROADS) for (const z of ROADS) {
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) box(walks, x + sx * (ch + sw / 2), 0, z + sz * (ch + sw / 2), sw, ROAD_Y, sw);
+  }
+  // markings: dashed centre line on main roads, zebra crossings at every intersection
+  for (const v of ROADS) {
+    const main = isMainRoad(v);
+    for (let k = 0; k < ROADS.length - 1; k++) {
+      const a0 = ROADS[k] + half + 0.6, a1 = ROADS[k + 1] - half - 0.6;
+      if (main) for (let t = a0 + 1; t < a1 - 1; t += 3) { box(marks, t, H_ASPH, v, 1.6, 0.012, 0.16); box(marks, v, H_ASPH, t, 0.16, 0.012, 1.6); }
+    }
+    for (const w of ROADS) {
+      // crossings on the four arms of intersection (v, w)
+      for (const side of [-1, 1]) {
+        for (let q = -1.5; q <= 1.5; q += 0.75) {
+          box(marks, v + side * (half + 0.5), H_ASPH, w + q, 0.9, 0.012, 0.38);
+          box(marks, w + q, H_ASPH, v + side * (half + 0.5), 0.38, 0.012, 0.9);
+        }
+      }
+    }
+  }
+  const mk = (list, mat) => { const m = new THREE.Mesh(mergeBoxes(list), mat); m.receiveShadow = true; root.add(m); return m; };
+  mk(asphMain, new THREE.MeshStandardMaterial({ color: '#4a4f57', roughness: 0.95 }));
+  mk(asphSec, new THREE.MeshStandardMaterial({ color: '#61666e', roughness: 0.95 }));
+  const walkMesh = mk(walks, new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.9 }));
+  const wp = walkMesh.geometry.attributes.position, wuv = walkMesh.geometry.attributes.uv;
+  for (let i = 0; i < wp.count; i++) wuv.setXY(i, wp.getX(i) / 2.2, wp.getZ(i) / 2.2);
+  mk(curbs, new THREE.MeshStandardMaterial({ color: '#c9c3b8', roughness: 0.8 }));
+  mk(marks, new THREE.MeshStandardMaterial({ color: '#f1f3f5', roughness: 0.7 }));
 
   // ---------------- Decorative city blocks around the playable district ----------------
   const cityscape = buildCityscape();
@@ -145,10 +181,20 @@ export function createEnvironment(engine) {
   // ---------------- Street lamps (instanced) ----------------
   const lampPos = [];
   const rl = rng(77);
-  for (const x of ROADS) for (const z of ROADS) {
-    if (rl() < 0.3 && Math.max(Math.abs(x), Math.abs(z)) > CELL) continue; // not every corner
-    const sx = rl() < 0.5 ? 1 : -1, sz = rl() < 0.5 ? 1 : -1;
-    lampPos.push([x + 2.0 * sx, z + 2.0 * sz]);
+  const lampOff = ROAD_W / 2 - 0.35;
+  for (const v of ROADS) {
+    const main = isMainRoad(v);
+    for (let k = 0; k < ROADS.length - 1; k++) {
+      const a0 = ROADS[k] + 4, a1 = ROADS[k + 1] - 4;
+      const step = main ? 7 : 12;
+      for (let t = a0 + (main ? 0 : rl() * 4); t <= a1; t += step) {
+        for (const side of main ? [-1, 1] : [rl() < 0.5 ? -1 : 1]) {
+          // horizontal street (z = v) and vertical street (x = v); arm points at the carriageway
+          lampPos.push([t, v + side * lampOff, side > 0 ? -Math.PI / 2 : Math.PI / 2]);
+          if (main || rl() < 0.6) lampPos.push([v + side * lampOff, t, side > 0 ? 0 : Math.PI]);
+        }
+      }
+    }
   }
   const lb = new MeshBuilder();
   lb.cyl(0.22, 0.3, 0.4, '#2b2f36', { mat: 'metal' }, 10);
@@ -162,9 +208,9 @@ export function createEnvironment(engine) {
   const lampMesh = toInstanced(lampProto.children[0], lampPos.length);
   const bulbMesh = toInstanced(bulbProto.children[0], lampPos.length);
   const dummy = new THREE.Object3D();
-  lampPos.forEach(([x, z], i) => {
+  lampPos.forEach(([x, z, ry], i) => {
     dummy.position.set(x, ROAD_Y, z);
-    dummy.rotation.y = LAMP_RY;
+    dummy.rotation.y = ry;
     dummy.updateMatrix();
     lampMesh.setMatrixAt(i, dummy.matrix);
     bulbMesh.setMatrixAt(i, dummy.matrix);
@@ -175,8 +221,8 @@ export function createEnvironment(engine) {
   const poolTex = makeRadialTexture('#ffd59a');
   const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
   const poolMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(9, 9).rotateX(-Math.PI / 2), poolMat, lampPos.length);
-  lampPos.forEach(([x, z], i) => {
-    const off = new THREE.Vector3(-1.0, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), LAMP_RY);
+  lampPos.forEach(([x, z, ry], i) => {
+    const off = new THREE.Vector3(-1.0, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
     dummy.position.set(x + off.x, ROAD_Y + 0.03, z + off.z);
     dummy.rotation.set(0, 0, 0);
     dummy.updateMatrix();
@@ -498,13 +544,13 @@ function buildStreetscape() {
   const carColors = ['#e0573f', '#4b8fd8', '#f2c14e', '#f8f9fa', '#2e3440', '#3bb3a8', '#8b5cf6'];
   // Tree-lined avenues: every third road line in each direction. Trees always stand in a
   // continuous grass strip with curbs; ordinary streets only get street furniture.
-  const isAvenue = (idx, horizontal) => (horizontal ? idx % 3 === 1 : idx % 3 === 2);
+  const isAvenue = (idx) => isMainRoad(ROADS[idx]);
   ROADS.forEach((v, idx) => {
     for (let k = 0; k < ROADS.length - 1; k++) {
       const a = ROADS[k] + 3.2, b = ROADS[k + 1] - 3.2; // segment between two intersections
       for (const horizontal of [true, false]) {
         const ry = horizontal ? 0 : Math.PI / 2;
-        if (isAvenue(idx, horizontal)) {
+        if (isAvenue(idx)) {
           const len = b - a, mid = (a + b) / 2;
           for (const side of [-1, 1]) {
             const off = v + side * EDGE;
@@ -551,7 +597,7 @@ function buildStreetscape() {
             props.box(1.6, 0.1, 0.3, '#c98a4b', { y: ROAD_Y + 0.45, z: 0.15, r: 0.03 });
             props.box(0.6, 0.6, 0.06, '#f2c14e', { x: 1.0, y: ROAD_Y + 2.45, z: 0.4, mat: 'lit', sharp: true });
           });
-          else if (roll < 0.7 && Math.abs(v) > PLAY_HALF) props.group({ x: horizontal ? t : v + side * 1.65, z: horizontal ? v + side * 1.65 : t, ry }, () => {
+          else if (roll < 0.7) props.group({ x: horizontal ? t : v + side * 1.25, z: horizontal ? v + side * 1.25 : t, y: 0.06 - ROAD_Y, ry }, () => {
             const col = carColors[(r() * carColors.length) | 0];
             props.rbox(3.4, 0.8, 1.6, 0.35, col, { y: ROAD_Y + 0.3, mat: 'soft' });
             props.rbox(1.9, 0.72, 1.45, 0.32, '#bfe3ff', { x: -0.2, y: ROAD_Y + 0.95, mat: 'glass' });

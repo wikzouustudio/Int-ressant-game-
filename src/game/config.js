@@ -1,9 +1,14 @@
-export const CELL = 18;          // size of a city block
+export const CELL = 20;          // size of a city block (13 m lot + 7 m street)
 export const GRID = 3;           // playable blocks from -GRID..GRID (7×7)
 export const DECOR = 2;          // rings of decorative city blocks around the playable district
 export const PLAY_HALF = (GRID + 0.5) * CELL;
 export const CITY_HALF = (GRID + DECOR + 0.5) * CELL;
+/** Main roads (boulevards with traffic): the axes around the HQ, the district ring and the outer ring. */
+export const isMainRoad = (v) => [CELL / 2, PLAY_HALF, CITY_HALF].some((m) => Math.abs(Math.abs(v) - m) < 0.1);
 export const PAD = 13;           // buildable pad size
+export const ROAD_W = CELL - PAD; // street: 4 m carriageway + 2 × 1.5 m sidewalks
+export const CARRIAGE = 4;
+export const SIDEWALK = 2.6;      // pedestrian lane offset from the street centreline
 export const ROAD_Y = 0.2;
 export const PAD_Y = 0.25;
 export const MAX_LEVEL = 10;

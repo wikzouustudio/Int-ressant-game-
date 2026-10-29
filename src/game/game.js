@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import {
-  CELL, GRID, PAD, PAD_Y, PLAY_HALF, STARTER_LOTS, landPrice, demolishCost, demolishTime, MAX_LEVEL, SAVE_KEY, BUSINESSES, BIZ, WORKERS, UPGRADES, LAW, CANTON, ZONES,
+  CELL, GRID, PAD, PAD_Y, PLAY_HALF, SIDEWALK, STARTER_LOTS, landPrice, demolishCost, demolishTime, MAX_LEVEL, SAVE_KEY, BUSINESSES, BIZ, WORKERS, UPGRADES, LAW, CANTON, ZONES,
   ROBOT_UPKEEP, FIRST_NAMES, ROBOT_NAMES, DAYS, levelMult, slotsFor, buildCost, upgradeCost, hireCost,
   trainingCost, buildTime, money,
 } from './config.js';
@@ -12,12 +12,13 @@ import { Effects } from './fx.js';
 import { Sound } from './audio.js';
 import { CrowdRenderer } from './crowd.js';
 import { Citizens } from './citizens.js';
+import { Traffic } from './traffic.js';
 import { PLAY_ROADS } from '../world/environment.js';
 import { icon } from '../ui/icons.js';
 
 const TIER = Object.fromEntries(WORKERS.map((w, i) => [w.id, { ...w, index: i }]));
 const WALK_Y = 0.23;
-const HQ_ROAD_Z = CELL / 2;
+const HQ_ROAD_Z = CELL / 2 - SIDEWALK; // HQ-side sidewalk of the street in front of the HQ
 const HQ_DEPOSIT_Z = 5.4;
 const LANE_Z = 5.6;        // local z of the walkway lane in front of a building
 const EDGE_X = PLAY_HALF + CELL / 2; // where commuters enter / leave the district
@@ -345,7 +346,8 @@ class Building {
     const p = this.local(x + Math.cos(yaw) * off, z - Math.sin(yaw) * off);
     return { ...p, yaw };
   }
-  roadZ() { return this.plot.center.z + CELL / 2; }
+  /** Sidewalk (building side) of the street in front of this lot. */
+  roadZ() { return this.plot.center.z + CELL / 2 - SIDEWALK; }
 
   computeRouteLength() {
     const { i, j } = this.plot;
@@ -364,13 +366,16 @@ class Building {
   makePath(slot, toHQ) {
     const { i, j } = this.plot;
     const cx = i * CELL, cz = j * CELL;
-    const jx = (Math.random() - 0.5) * 2.6;
-    const jz = (Math.random() - 0.5) * 2.6;
+    // walk on sidewalks: the one in front of the lot, then the cross street beside the
+    // lot's column (crossing at the corners), then the HQ-side sidewalk
+    const jx = (Math.random() - 0.5) * 0.7;
+    const jz = (Math.random() - 0.5) * 0.7;
     const spot = this.spotPos(slot);
-    const zr = cz + CELL / 2 + jz;
+    const zr = cz + CELL / 2 - SIDEWALK + jz;
     const pts = [{ x: spot.x, z: zr }];
     if (j !== 0) {
-      const xr = (i === 0 ? CELL / 2 : cx - Math.sign(i) * CELL / 2) + jx;
+      const road = i === 0 ? CELL / 2 : cx - Math.sign(i) * CELL / 2;
+      const xr = road + (i > 0 ? SIDEWALK : -SIDEWALK) + jx;
       pts.push({ x: xr, z: zr }, { x: xr, z: HQ_ROAD_Z + jz });
     }
     const hx = (Math.random() - 0.5) * 6.5;
@@ -607,12 +612,12 @@ class Worker {
     const pts = [];
     if (fromHQ) {
       const p = this.char.root.position;
-      const z = HQ_ROAD_Z + (Math.random() - 0.5) * 2.4;
+      const z = HQ_ROAD_Z + (Math.random() - 0.5) * 0.7;
       pts.push({ x: p.x, z }, { x: this.side * EDGE_X, z });
     } else {
       const from = this.exitPoints(pts);
       const spot = b.spotPos(this.slot);
-      const zr = b.roadZ() + (Math.random() - 0.5) * 2.4;
+      const zr = b.roadZ() + (Math.random() - 0.5) * 0.7;
       pts.push(b.lane(from.x), b.lane(spot.x), spot, { x: spot.x, z: zr }, { x: this.side * EDGE_X, z: zr });
     }
     this.char.bag.visible = false;
@@ -624,7 +629,7 @@ class Worker {
   commuteIn() {
     const b = this.building;
     const spot = b.spotPos(this.slot);
-    const zr = b.roadZ() + (Math.random() - 0.5) * 2.4;
+    const zr = b.roadZ() + (Math.random() - 0.5) * 0.7;
     this.setPos({ x: this.side * EDGE_X, z: zr });
     this.setVisible(true);
     this.inside = false;
@@ -737,6 +742,7 @@ export class Game {
     this.sound = new Sound();
     this.crowd = new CrowdRenderer(this.scene);
     this.citizens = new Citizens(this);
+    this.traffic = new Traffic(this);
     this.crew = [];
     this.lodScale = 1;
     this.activeCount = 0;
@@ -1482,6 +1488,7 @@ export class Game {
     for (const b of this.buildings.values()) b.update(dt, t);
     for (const w of this.workers) w.update(dt, t);
     this.citizens.update(dt, t);
+    this.traffic.update(dt);
     const canBuild = this.cash >= this.cheapestCache;
     for (const p of this.plots.values()) {
       const holo = p.owned ? canBuild && !p.ruin : (!p.ruin && this.isFrontier(p) && this.cash >= p.price);
@@ -1541,7 +1548,7 @@ export class Game {
 
   /** Called right before rendering, after the camera moved. */
   renderPrep() {
-    this.crowd.update(this.camera, this.workers, this.citizens.list, this.crew);
+    this.crowd.update(this.camera, this.workers, this.citizens.list, this.crew, this.traffic.cars);
   }
 
   setLodScale(scale) {

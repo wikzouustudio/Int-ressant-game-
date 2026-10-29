@@ -5,13 +5,13 @@
 
 export const TIERS = [
   { id: 'low', name: 'Bas', maxDpr: 1.5, aa: 0, bloom: false, shadowSize: 2048, shadowSoft: false, shadowEvery: 2,
-    shadowRange: 0.85, lodScale: 0.55, crowdLod: 32, farShadows: false, particles: 0.4, vegDist: 230, clouds: false, citizens: 24 },
+    shadowRange: 0.85, lodScale: 0.55, crowdLod: 32, farShadows: false, particles: 0.4, vegDist: 230, clouds: false, citizens: 24, cars: 12 },
   { id: 'medium', name: 'Moyen', maxDpr: 1.75, aa: 0, bloom: false, shadowSize: 2048, shadowSoft: false, shadowEvery: 1,
-    shadowRange: 1, lodScale: 0.8, crowdLod: 46, farShadows: false, particles: 0.7, vegDist: 360, clouds: true, citizens: 50 },
+    shadowRange: 1, lodScale: 0.8, crowdLod: 46, farShadows: false, particles: 0.7, vegDist: 360, clouds: true, citizens: 50, cars: 24 },
   { id: 'high', name: 'Élevé', maxDpr: 2, aa: 4, bloom: true, shadowSize: 2048, shadowSoft: true, shadowEvery: 1,
-    shadowRange: 1, lodScale: 1, crowdLod: 60, farShadows: true, particles: 1, vegDist: 560, clouds: true, citizens: 90 },
+    shadowRange: 1, lodScale: 1, crowdLod: 60, farShadows: true, particles: 1, vegDist: 560, clouds: true, citizens: 90, cars: 40 },
   { id: 'ultra', name: 'Ultra', maxDpr: 2.5, aa: 4, bloom: true, shadowSize: 4096, shadowSoft: true, shadowEvery: 1,
-    shadowRange: 1.15, lodScale: 1.4, crowdLod: 90, farShadows: true, particles: 1, vegDist: 900, clouds: true, citizens: 140 },
+    shadowRange: 1.15, lodScale: 1.4, crowdLod: 90, farShadows: true, particles: 1, vegDist: 900, clouds: true, citizens: 140, cars: 64 },
 ];
 
 /** Best guess of what the device can sustain, used as the auto mode's ceiling. */

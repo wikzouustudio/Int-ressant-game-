@@ -150,6 +150,21 @@ function legGeo(b, tier) {
 }
 
 const PROPS = {
+  car(b) {
+    // faces +Z like the characters; body colour comes from the "shirt" slot
+    b.rbox(1.7, 0.75, 3.7, 0.3, '#000', o({ y: 0.28, mat: 'soft' }, SHIRT_S));
+    b.rbox(1.5, 0.66, 2.0, 0.28, '#9fd3ff', { y: 0.96, z: -0.2, mat: 'glass' });
+    b.rbox(1.56, 0.1, 1.9, 0.05, '#000', o({ y: 1.6, z: -0.2, mat: 'soft' }, SHIRT_S));
+    for (const [x, z] of [[0.78, 1.15], [-0.78, 1.15], [0.78, -1.15], [-0.78, -1.15]]) {
+      b.cyl(0.38, 0.38, 0.28, '#1f2329', { x: x - Math.sign(x) * 0.14, y: 0.38, z, rz: Math.PI / 2 }, 12);
+      b.cyl(0.2, 0.2, 0.3, '#c9ced6', { x: x - Math.sign(x) * 0.15, y: 0.38, z, rz: Math.PI / 2, mat: 'metal' }, 8);
+    }
+    b.box(0.4, 0.18, 0.08, '#fff7cc', { x: -0.5, y: 0.62, z: 1.86, mat: 'neon' });
+    b.box(0.4, 0.18, 0.08, '#fff7cc', { x: 0.5, y: 0.62, z: 1.86, mat: 'neon' });
+    b.box(0.36, 0.16, 0.08, '#ff3030', { x: -0.55, y: 0.66, z: -1.86, mat: 'neon' });
+    b.box(0.36, 0.16, 0.08, '#ff3030', { x: 0.55, y: 0.66, z: -1.86, mat: 'neon' });
+    b.box(1.0, 0.12, 0.08, '#c9ced6', { y: 0.38, z: 1.88, mat: 'metal' });
+  },
   bag(b) {
     b.sphere(0.34, '#c8a165', { y: -0.98, z: 0.12, sy: 0.92 }, 14, 10);
     b.cyl(0.1, 0.16, 0.16, '#a07a45', { y: -0.72, z: 0.12 }, 10);

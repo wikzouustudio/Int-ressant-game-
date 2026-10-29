@@ -39,6 +39,7 @@ async function boot() {
     env.setVegetationDistance(t.vegDist);
     env.setClouds(t.clouds);
     game.citizens.setMax(t.citizens);
+    game.traffic.setMax(t.cars);
     fpsCap = fps;
   });
   quality.start();
@@ -116,6 +117,7 @@ async function boot() {
     else { clock.getDelta(); quality.reset(); }
   });
 
+  setTimeout(() => document.getElementById('controls-hint')?.classList.add('fade'), 12000);
   setTimeout(() => document.getElementById('loader').classList.add('done'), 250);
   setTimeout(() => document.getElementById('loader').remove(), 1100);
 
