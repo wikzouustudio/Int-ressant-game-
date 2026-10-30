@@ -454,8 +454,8 @@ export function buildDistricts() {
   }
   const chunks = [];
   for (const lots of map.values()) {
-    const hi = new MeshBuilder({ lod: 1 });
-    const lo = new MeshBuilder({ lod: 2 });
+    const hi = new MeshBuilder({ lod: 2, uv: false });
+    const lo = new MeshBuilder({ lod: 3, uv: false });
     const center = new THREE.Vector3();
     for (const lot of lots) { drawLot(hi, lot); drawLot(lo, lot); center.x += lot.x; center.z += lot.z; }
     center.divideScalar(lots.length);
@@ -471,7 +471,7 @@ export function buildDistricts() {
     chunks.push({ near, far, proxy, center, radius, low: false });
   }
   // farmland strips
-  const fb = new MeshBuilder({ lod: 1 });
+  const fb = new MeshBuilder({ lod: 2, uv: false });
   for (const f of FIELDS) {
     fb.group({ x: f.x, z: f.z, ry: f.ry }, () => {
       fb.box(f.w, 0.12, f.d, f.color, { sharp: true });

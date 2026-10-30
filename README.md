@@ -23,7 +23,18 @@ Version optimisée : `npm run build` (site statique dans `dist/`), puis `npm run
 3. **Engage du personnel** : Apprenti·e CFC → Employé·e CFC → Cadre (ES/HES), ou des Robots.
 4. Chaque employé suit le **déroulé de travail** de son commerce. Exemple à la boulangerie : entrer au fournil,
    pétrir la pâte, cuire le pain, vendre en vitrine, servir la terrasse, puis livrer la recette au Siège.
-5. Agrandis tes bâtiments (10 niveaux), achète des **recherches**, surveille ta **Fiduciaire**.
+5. Agrandis tes bâtiments (15 niveaux), achète des **recherches** (15), surveille ta **Fiduciaire**.
+6. Suis les **Objectifs** (31 étapes avec primes) et, quand ton chiffre d'affaires est assez élevé,
+   **entre en bourse (SIX)** : tu revends tout contre des actions qui donnent +5 % de revenus chacune, pour toujours.
+
+## La ville
+
+Le centre constructible (7×7 parcelles) est entouré d'une vraie ville organisée comme dans un city-builder :
+boulevard circulaire, autoroute de contournement, avenues radiales, voie ferrée avec un train,
+et des quartiers distincts — **vieille ville piétonne** (fontaine, église), **quartier des affaires**,
+**zone commerciale** (centre commercial, parkings), **zone industrielle** (usines, silos, conteneurs, centrale),
+**quartier résidentiel** (chalets, villas avec piscine, culs-de-sac) — séparés par des **zones sans routes** :
+parc avec lac, forêt, terres agricoles avec ferme, stade. Voitures et promeneurs circulent sur tout le réseau.
 
 ## Le droit suisse dans le jeu
 
@@ -39,6 +50,8 @@ Version optimisée : `npm run build` (site statique dans `dist/`), puis `npm run
 | **Impôt sur le bénéfice** | Taux effectif du canton choisi, prélevé chaque lundi. |
 | **LAT / permis de construire** | Zone mixte (commerces, bureaux) ou zone industrielle (usine, mine, spatioport). Émoluments du permis, enquête publique. |
 | **Registre du commerce** | Inscription obligatoire dès CHF 100'000 de CA. |
+| **Loi sur les cartels (LCart)** | La COMCO bloque une position dominante : 6 commerces du même type au maximum. |
+| **Transfert d'entreprise (CO art. 333)** | Si tu revends un commerce, les contrats de travail passent au repreneur (pas d'indemnité). |
 
 Les robots ne sont pas soumis à la LTr : ils travaillent 24h/24 mais coûtent 12 % du CA en entretien.
 La nuit et le week-end, quand plus personne ne travaille, le temps s'accélère.

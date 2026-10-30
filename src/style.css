@@ -668,3 +668,11 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
   #toasts { top: 64px; }
   .banner { top: 64px; }
 }
+
+/* resale of a business: discreet, at the bottom of the panel */
+.sell-btn { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 14px; padding: 10px 12px; border-radius: 14px; font-size: 12.5px; text-align: left;
+  color: #ffb4b4; background: rgba(229, 72, 77, .1); border: 1px dashed rgba(229, 72, 77, .45); transition: background .15s; }
+.sell-btn:hover { background: rgba(229, 72, 77, .2); }
+.sell-btn span { flex: 1; }
+.sell-btn b { color: #fff; font-family: var(--display); }
+.modal-card h2 { padding-right: 44px; }

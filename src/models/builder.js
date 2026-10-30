@@ -23,6 +23,7 @@ export const LOD_SETTINGS = [
   { skip: 0, seg: 1, round: true },
   { skip: 0.12, seg: 0.6, round: true },
   { skip: 0.32, seg: 0.4, round: true },
+  { skip: 0.5, seg: 0.3, round: false }, // distant scenery: plain boxes, tiny parts dropped
 ];
 
 /**
@@ -39,11 +40,12 @@ export const LOD_SETTINGS = [
  *           so the whole model can be drawn with one instanced material.
  */
 export class MeshBuilder {
-  constructor({ lod = 0, extra = false } = {}) {
+  constructor({ lod = 0, extra = false, uv = true } = {}) {
     this.parts = new Map();
     this.stack = [new THREE.Matrix4()];
     this.lod = LOD_SETTINGS[lod];
     this.extra = extra;
+    this.uv = uv && !extra; // untextured scenery can skip the uv attribute (saves memory)
   }
 
   skip(size) { return size < this.lod.skip; }
@@ -66,7 +68,7 @@ export class MeshBuilder {
       for (let i = 0; i < count; i++) idx[i] = i;
       g.setIndex(idx);
     }
-    if (!this.extra && !g.attributes.uv) {
+    if (this.uv && !g.attributes.uv) {
       g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
     }
     g.applyMatrix4(composeMatrix(o));
@@ -82,7 +84,7 @@ export class MeshBuilder {
       col[i * 3 + 2] = _c.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const keep = this.extra ? ['position', 'normal', 'color'] : ['position', 'normal', 'uv', 'color'];
+    const keep = this.uv ? ['position', 'normal', 'uv', 'color'] : ['position', 'normal', 'color'];
     for (const key of Object.keys(g.attributes)) {
       if (!keep.includes(key)) g.deleteAttribute(key);
     }
@@ -176,7 +178,7 @@ export class MeshBuilder {
   /** Triangular prism: length along X, triangle in the YZ plane. */
   prism(w, h, d, color, o = {}) {
     if (this.skip(Math.max(w, h, d))) return this;
-    if (!o.sharp) {
+    if (!o.sharp && this.lod.round) {
       // rounded gable: triangle extruded with a soft bevel
       const bv = Math.min(0.14, h * 0.12, d * 0.08);
       const shape = new THREE.Shape();

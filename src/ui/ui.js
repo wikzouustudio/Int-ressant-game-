@@ -322,7 +322,7 @@ export class UI {
           <div><span>${icon('shield', 'inline')} Prime LAA (accidents prof.)</span><b>${pct(biz.laa, 1)}</b></div>
           <div><span>${icon('pin', 'inline')} Zone (LAT)</span><b>${ZONES[b.plot.zone].name}</b></div>
         </div>
-        <button class="btn red" data-action="sell"><span class="l">${icon('contract')}<span>Revendre le commerce<small>Le terrain reste à toi · contrats transférés (CO 333)</small></span></span><span class="price">+${money(sellValue(biz, b.level))}</span></button>
+        <button class="sell-btn" data-action="sell">${icon('contract', 'inline')}<span>Revendre le commerce · le terrain reste à toi, contrats transférés (CO 333)</span><b>+${money(sellValue(biz, b.level))}</b></button>
       </div>`;
   }
 

@@ -225,39 +225,54 @@ export function createEnvironment(engine) {
   }
   lampPos.push(...network.lamps);
   const lb = new MeshBuilder();
-  lb.cyl(0.22, 0.3, 0.4, '#2b2f36', { mat: 'metal' }, 10);
-  lb.cyl(0.08, 0.11, 4.6, '#2b2f36', { mat: 'metal' }, 8);
-  lb.box(1.1, 0.08, 0.08, '#2b2f36', { x: -0.5, y: 4.55, mat: 'metal' });
-  lb.cyl(0.25, 0.35, 0.3, '#2b2f36', { x: -1.0, y: 4.35, mat: 'metal' }, 10);
+  lb.cyl(0.22, 0.3, 0.4, '#2b2f36', { mat: 'metal' }, 7);
+  lb.cyl(0.08, 0.11, 4.6, '#2b2f36', { mat: 'metal' }, 6);
+  lb.box(1.1, 0.08, 0.08, '#2b2f36', { x: -0.5, y: 4.55, mat: 'metal', sharp: true });
+  lb.cyl(0.25, 0.35, 0.3, '#2b2f36', { x: -1.0, y: 4.35, mat: 'metal' }, 8);
   const lampProto = lb.build();
   const lb2 = new MeshBuilder();
-  lb2.sphere(0.24, '#fff0c8', { x: -1.0, y: 4.3, mat: 'lit' }, 10, 8);
+  lb2.sphere(0.24, '#fff0c8', { x: -1.0, y: 4.3, mat: 'lit' }, 8, 6);
   const bulbProto = lb2.build({ castShadow: false });
-  const lampMesh = toInstanced(lampProto.children[0], lampPos.length);
-  const bulbMesh = toInstanced(bulbProto.children[0], lampPos.length);
-  const dummy = new THREE.Object3D();
-  lampPos.forEach(([x, z, ry], i) => {
-    dummy.position.set(x, ROAD_Y, z);
-    dummy.rotation.y = ry;
-    dummy.updateMatrix();
-    lampMesh.setMatrixAt(i, dummy.matrix);
-    bulbMesh.setMatrixAt(i, dummy.matrix);
-  });
-  root.add(lampMesh, bulbMesh);
-
   // Light pools on the ground at night
   const poolTex = makeRadialTexture('#ffd59a');
   const poolMat = new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
-  const poolMesh = new THREE.InstancedMesh(new THREE.PlaneGeometry(9, 9).rotateX(-Math.PI / 2), poolMat, lampPos.length);
-  lampPos.forEach(([x, z, ry], i) => {
-    const off = new THREE.Vector3(-1.0, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), ry);
-    dummy.position.set(x + off.x, ROAD_Y + 0.03, z + off.z);
-    dummy.rotation.set(0, 0, 0);
-    dummy.updateMatrix();
-    poolMesh.setMatrixAt(i, dummy.matrix);
-  });
-  poolMesh.renderOrder = 2;
-  root.add(poolMesh);
+  const poolGeo = new THREE.PlaneGeometry(9, 9).rotateX(-Math.PI / 2);
+  // ~1000 lamps: instanced per 180 m cell so off-screen / distant cells are skipped
+  const dummy = new THREE.Object3D();
+  const LCH = 180;
+  const lampCells = new Map();
+  for (const l of lampPos) {
+    const key = `${Math.floor(l[0] / LCH)},${Math.floor(l[1] / LCH)}`;
+    if (!lampCells.has(key)) lampCells.set(key, []);
+    lampCells.get(key).push(l);
+  }
+  const lampChunks = [];
+  const _off = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+  for (const list of lampCells.values()) {
+    const lamp = toInstanced(lampProto.children[0], list.length);
+    const bulb = toInstanced(bulbProto.children[0], list.length);
+    const pool = new THREE.InstancedMesh(poolGeo, poolMat, list.length);
+    const center = new THREE.Vector3();
+    list.forEach(([x, z, ry], i) => {
+      dummy.position.set(x, ROAD_Y, z);
+      dummy.rotation.set(0, ry, 0);
+      dummy.updateMatrix();
+      lamp.setMatrixAt(i, dummy.matrix);
+      bulb.setMatrixAt(i, dummy.matrix);
+      _off.set(-1.0, 0, 0).applyAxisAngle(_up, ry);
+      dummy.position.set(x + _off.x, ROAD_Y + 0.03, z + _off.z);
+      dummy.rotation.set(0, 0, 0);
+      dummy.updateMatrix();
+      pool.setMatrixAt(i, dummy.matrix);
+      center.x += x; center.z += z;
+    });
+    center.divideScalar(list.length);
+    let radius = 0;
+    for (const [x, z] of list) radius = Math.max(radius, Math.hypot(x - center.x, z - center.z));
+    for (const m of [lamp, bulb, pool]) { m.computeBoundingSphere(); root.add(m); }
+    pool.renderOrder = 2;
+    lampChunks.push({ lamp, bulb, pool, center, radius, visible: true });
+  }
 
   // ---------------- Trees (forests, parks, gardens, countryside) ----------------
   const r = rng(1234);
@@ -326,13 +341,14 @@ export function createEnvironment(engine) {
   const vegStats = { chunks: vegetation.length, visible: 0, low: 0 };
   let vegDist = 600;
   let cityNear = 170;
+  let treeNear = 160;
   function updateVegetation(camPos) {
     let vis = 0, low = 0;
     for (const c of vegetation) {
       const d = Math.hypot(c.center.x - camPos.x, c.center.z - camPos.z) - c.radius;
       const visible = d < vegDist;
       // hysteresis band so cells do not flip back and forth
-      const wantLow = c.low ? d > 150 : d > 170;
+      const wantLow = c.low ? d > treeNear - 10 : d > treeNear + 10;
       if (visible !== c.visible) { c.visible = visible; c.meshes.forEach((m) => { m.visible = visible; }); }
       if (wantLow !== c.low) {
         c.low = wantLow;
@@ -342,6 +358,13 @@ export function createEnvironment(engine) {
     }
     vegStats.visible = vis;
     vegStats.low = low;
+    for (const c of lampChunks) {
+      const d = Math.hypot(c.center.x - camPos.x, c.center.z - camPos.z) - c.radius;
+      const visible = d < Math.max(160, vegDist * 0.7);
+      if (visible !== c.visible) { c.visible = visible; c.lamp.visible = c.bulb.visible = visible; }
+      c.lamp.castShadow = d < 40;
+      c.pool.visible = visible && night > 0.02;
+    }
   }
 
   // rocks scattered in the countryside
@@ -397,6 +420,7 @@ export function createEnvironment(engine) {
   const moonCol = new THREE.Color('#9fb8ff');
   const tmp = new THREE.Color();
   let night = 0;
+  let poolsOn = true;
 
   // ---------------- Shadows fitted to the view ----------------
   // The shadow frustum follows the camera focus and shrinks when zooming in, so the
@@ -474,6 +498,7 @@ export function createEnvironment(engine) {
     moon.visible = night > 0.02;
 
     poolMat.opacity = night * 0.55;
+    if ((night > 0.02) !== poolsOn) { poolsOn = night > 0.02; for (const c of lampChunks) c.pool.visible = poolsOn && c.visible; }
     setNightLevel(night);
 
     for (const cl of clouds) {
@@ -486,7 +511,7 @@ export function createEnvironment(engine) {
 
   return {
     update, sun, setShadowQuality, vegStats,
-    setVegetationDistance(d) { vegDist = d; cityNear = Math.min(260, Math.max(80, d * 0.32)); frame = 9; },
+    setVegetationDistance(d) { vegDist = d; cityNear = Math.min(260, Math.max(80, d * 0.32)); treeNear = Math.min(170, Math.max(70, d * 0.3)); frame = 9; },
     setClouds(on) { clouds.forEach((c) => { c.visible = on; }); },
     get night() { return night; },
   };
