@@ -406,7 +406,7 @@ export function createEnvironment(engine) {
       if (cl.position.x > 340) cl.position.x = -340;
     }
     train.update(time);
-    if (view && frame % 10 === 0) districts.update(view.camera, cityNear);
+    if (view && frame % 4 === 0) districts.update(view.camera, cityNear);
   }
 
   return {

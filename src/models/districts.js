@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { MeshBuilder, rng } from './builder.js';
+import { MeshBuilder, rng, disposeObject } from './builder.js';
 import { makeShadowProxy } from './buildings.js';
 import { PAL, shade, awning, pot, bench, cafeTable } from './kit.js';
 import { LOTS, FIELDS } from '../world/citymap.js';
 import { HOUSES } from './houses.js';
+import { CITY_MODELS } from './cityblocks.js';
 
 // Building models for the districts around the playable city. Kept deliberately lean
 // (window bands instead of single windows on tall buildings) because there are a few
@@ -434,7 +435,7 @@ const MODELS = {
   },
 };
 
-Object.assign(MODELS, HOUSES);
+Object.assign(MODELS, HOUSES, CITY_MODELS);
 
 // ---------------- small objects for the map editor ----------------
 Object.assign(MODELS, {
@@ -508,24 +509,31 @@ export function buildDistricts() {
     if (!map.has(key)) map.set(key, []);
     map.get(key).push(lot);
   }
+  // Far LOD + shadow caster are built up front; the detailed near LOD is built only for
+  // chunks close to the camera (one per update) and freed again when they are left behind.
   const chunks = [];
+  const CH_MAT = (g) => g.traverse((m) => { if (m.isMesh) { m.castShadow = false; m.geometry.computeBoundingSphere(); } });
   for (const lots of map.values()) {
-    const hi = new MeshBuilder({ lod: 2, uv: false });
     const lo = new MeshBuilder({ lod: 3, uv: false });
     const center = new THREE.Vector3();
-    for (const lot of lots) { drawLot(hi, lot); drawLot(lo, lot); center.x += lot.x; center.z += lot.z; }
+    for (const lot of lots) { drawLot(lo, lot); center.x += lot.x; center.z += lot.z; }
     center.divideScalar(lots.length);
     let radius = 0;
     for (const lot of lots) radius = Math.max(radius, Math.hypot(lot.x - center.x, lot.z - center.z) + Math.max(lot.w, lot.d));
-    const near = hi.build();
     const far = lo.build({ castShadow: false });
     const proxy = makeShadowProxy(far);
-    for (const g of [near, far]) g.traverse((m) => { if (m.isMesh) { m.castShadow = false; m.geometry.computeBoundingSphere(); } });
+    CH_MAT(far);
     proxy.geometry.computeBoundingSphere();
-    far.visible = false;
-    group.add(near, far, proxy);
-    chunks.push({ near, far, proxy, center, radius, low: false });
+    group.add(far, proxy);
+    chunks.push({ lots, near: null, far, proxy, center, radius, low: true });
   }
+  const buildNear = (c) => {
+    const hi = new MeshBuilder({ lod: 2, uv: false });
+    for (const lot of c.lots) drawLot(hi, lot);
+    c.near = hi.build();
+    CH_MAT(c.near);
+    group.add(c.near);
+  };
   // farmland strips
   const fb = new MeshBuilder({ lod: 2, uv: false });
   for (const f of FIELDS) {
@@ -541,10 +549,17 @@ export function buildDistricts() {
     chunks,
     /** Swap chunk LODs by distance to the camera (hysteresis avoids flicker). */
     update(cam, nearDist) {
+      let budget = 1;
       for (const c of chunks) {
         const d = Math.hypot(c.center.x - cam.x, c.center.z - cam.z) - c.radius;
         const low = c.low ? d > nearDist - 15 : d > nearDist + 15;
-        if (low !== c.low) { c.low = low; c.near.visible = !low; c.far.visible = low; }
+        if (!low && !c.near) { if (budget-- <= 0) continue; buildNear(c); }
+        if (low !== c.low || (c.near && c.near.visible === low)) {
+          c.low = low;
+          if (c.near) c.near.visible = !low;
+          c.far.visible = low;
+        }
+        if (low && c.near && d > nearDist + 90) { group.remove(c.near); disposeObject(c.near); c.near = null; }
       }
     },
   };

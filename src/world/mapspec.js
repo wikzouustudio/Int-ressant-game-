@@ -5,7 +5,7 @@
 
 import { PLAY_HALF } from '../game/config.js';
 
-export const MAP_KEY = 'empire-map-v1';
+export const MAP_KEY = 'empire-map-v2';
 export const WORLD_HALF = 330;          // the editable square world: x, z in [-330, 330]
 export const ZCELL = 10;                // zone painting resolution (m)
 export const ZN = (2 * WORLD_HALF) / ZCELL;
@@ -141,8 +141,8 @@ export function defaultSpec() {
   fillRect(z, -330, -330, -300, 330, 'forest');
   fillRect(z, 300, -330, 330, 330, 'forest');
   // lake in the north-east park, pond in the north-west park
-  fillRect(z, 240, -200, 270, -170, 'water');
-  fillRect(z, 250, -210, 260, -160, 'water');
+  fillRect(z, 240, -210, 270, -160, 'water');
+  fillRect(z, 250, -220, 260, -150, 'water');
   fillRect(z, -200, -200, -170, -180, 'water');
   fillRect(z, -190, -210, -180, -170, 'water');
 
@@ -166,6 +166,8 @@ export function defaultSpec() {
     // housing: winding streets
     { type: 'sec', smooth: true, pts: [[-150, -80], [-190, -100], [-230, -70], [-260, -95], [-285, -80]] },
     { type: 'sec', smooth: true, pts: [[-150, 70], [-185, 95], [-225, 60], [-265, 90], [-285, 75]] },
+    { type: 'sec', pts: [[-230, -72], [-230, -35]] }, { type: 'sec', pts: [[-190, -98], [-190, -130]] },
+    { type: 'sec', pts: [[-225, 62], [-225, 30]] }, { type: 'sec', pts: [[-185, 93], [-185, 130]] },
     { type: 'sec', pts: [[-200, -110], [-200, 110]] }, { type: 'sec', pts: [[-255, -110], [-255, 110]] },
     // old-town alleys and the square
     { type: 'path', pts: [[0, -74], [0, -112]] },
@@ -174,7 +176,7 @@ export function defaultSpec() {
     { type: 'path', pts: [[-100, -112], [100, -112]] },
     { type: 'path', pts: [[-100, -78], [100, -78]] },
     // park paths
-    { type: 'path', closed: true, smooth: true, pts: [[236, -218], [276, -218], [276, -150], [236, -150]] },
+    { type: 'path', closed: true, smooth: true, pts: [[234, -228], [275, -228], [275, -142], [234, -142]] },
     { type: 'path', smooth: true, pts: [[155, -125], [200, -130], [236, -150]] },
     { type: 'path', smooth: true, pts: [[-155, -150], [-175, -165], [-205, -165]] },
     { type: 'path', smooth: true, pts: [[155, 160], [190, 200], [230, 190], [280, 235]] },
@@ -192,9 +194,23 @@ export function defaultSpec() {
     { kind: 'plant', x: 35, z: 262, ry: Math.PI },
     { kind: 'stadium', x: -190, z: -135, ry: 0 },
     { kind: 'farmhouse', x: -235, z: 230, ry: 0 },
-    { kind: 'playground', x: 255, z: -132, ry: 0 },
+    { kind: 'playground', x: 190, z: -172, ry: 0 },
   ];
-  return { v: 1, zones: encodeZones(z), roads: [...defaultCoreRoads(), ...roads], specials, objects: [], auto: true, plots: defaultPlots(), hq: { ...HQ_DEFAULT } };
+  // hand-placed scenes: lakeside beach houses, log cabins in the forest, barns on the
+  // farmland, small squares in the business district
+  const O = (k, x, z, ry = 0, seed = 1) => ({ k, x, z, ry, s: 1, seed });
+  const objects = [
+    O('hBeach', 242, -238, 0, 11), O('hBeach', 259, -238, 0, 12), O('hBeach', 245, -130, Math.PI, 13), O('hBeach', 266, -130, Math.PI, 14),
+    O('hCabin', 165, 148, Math.PI / 2, 21), O('hCabin', 140, 172, Math.PI, 22), O('hCabin', 255, 250, -Math.PI / 2, 23),
+    O('hCabin', 270, 198, -Math.PI / 2, 24), O('hCabin', 232, 268, 0, 25),
+    O('barn', -205, 252, 0, 31), O('barn', -262, 200, Math.PI / 2, 32), O('chalet', -175, 205, 0, 33), O('chalet', -150, 252, Math.PI, 34),
+    O('plaza', -35, -176, 0, 41), O('plaza', 85, -176, 0, 42),
+    O('hFarmhouse', -255, 125, Math.PI / 2, 51), O('hRanch', -195, 135, Math.PI, 52),
+    O('bench', 238, -150, Math.PI, 61), O('bench', 275, -150, Math.PI, 62), O('flowers', 256, -146, 0, 63),
+    O('kiosk', 180, -145, Math.PI, 64), O('busstop', 30, 80, Math.PI, 65), O('busstop', -30, -80, 0, 66),
+  ];
+
+  return { v: 1, zones: encodeZones(z), roads: [...defaultCoreRoads(), ...roads], specials, objects, auto: true, plots: defaultPlots(), hq: { ...HQ_DEFAULT } };
 }
 
 /** A blank world: grass only, nothing generated. */

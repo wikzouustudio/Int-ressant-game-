@@ -9,7 +9,7 @@ const TRIM = '#fbf7ef';
 const pick = (r, a) => a[(r() * a.length) | 0];
 
 /** Shingled gable roof, ridge along X. y = eaves height. `wall` fills the gable ends. */
-function gable(b, o) {
+export function gable(b, o) {
   const { w, d, h, color = ROOF, over = 0.45, wall } = o;
   const half = d / 2 + over;
   const len = Math.hypot(half, h);
@@ -32,7 +32,7 @@ function gable(b, o) {
 }
 
 /** Dormer window sitting on a roof slope facing +z. */
-function dormer(b, o) {
+export function dormer(b, o) {
   const { x = 0, y, z, wall = '#cfe1f2' } = o;
   b.group({ x, y, z }, () => {
     b.box(1.6, 1.5, 1.6, wall, { r: 0.1 });
@@ -42,7 +42,7 @@ function dormer(b, o) {
 }
 
 /** Porch: deck, steps, posts, balustrade and a small roof. */
-function porch(b, o) {
+export function porch(b, o) {
   const { x = 0, z, w, d = 2.2, deck = 0.6, roofY = 3.0, post = TRIM, rail = TRIM, roof = ROOF, stair = 0, stone } = o;
   b.group({ x, z }, () => {
     b.box(w, deck, d, o.floor || '#c98a4b', { z: 0, r: 0.08 });
@@ -69,7 +69,7 @@ function porch(b, o) {
   });
 }
 
-function shrubs(b, r, xs, z, s = 1) {
+export function shrubs(b, r, xs, z, s = 1) {
   for (const x of xs) {
     const c = pick(r, ['#4ca346', '#3f8f45', '#5cb84a', '#6aa84f']);
     b.blob(0.5 * s, c, { x, y: 0.42 * s, z, sy: 0.85 }, 1);
@@ -77,16 +77,16 @@ function shrubs(b, r, xs, z, s = 1) {
     if (r() < 0.4) b.sphere(0.09, pick(r, ['#ff6b9a', '#ffd43b', '#ffffff']), { x: x - 0.2, y: 0.85 * s, z: z + 0.35 }, 6, 4);
   }
 }
-function pots(b, r, list) {
+export function pots(b, r, list) {
   for (const [x, z] of list) pot(b, { x, z, color: pick(r, ['#c56b4f', '#b4513a', '#d98c5f']), flower: r() < 0.6 ? pick(r, ['#ff6b9a', '#ffd43b', '#ffffff']) : null });
 }
-function path(b, z0, z1, x = 0, w = 1.4) {
+export function path(b, z0, z1, x = 0, w = 1.4) {
   b.box(w, 0.08, z1 - z0, '#d9d3c7', { x, z: (z0 + z1) / 2, sharp: true });
 }
-function brickLines(b, w, h, z, y0, color, step = 0.32) {
+export function brickLines(b, w, h, z, y0, color, step = 0.32) {
   for (let y = y0 + step; y < y0 + h - 0.1; y += step) b.box(w, 0.04, 0.04, shade(color, 0.75), { y, z, sharp: true });
 }
-function garageDoor(b, o) {
+export function garageDoor(b, o) {
   const { x, z, w = 2.6, h = 2.2, color = '#fbf7ef' } = o;
   b.box(w + 0.3, h + 0.2, 0.12, TRIM, { x, z: z - 0.02, r: 0.05 });
   b.box(w, h, 0.12, color, { x, z: z + 0.03, r: 0.04 });

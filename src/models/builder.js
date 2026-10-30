@@ -22,8 +22,8 @@ export const MAT_CODE = { std: 0, soft: 1, metal: 2, gold: 3, glass: 4, lit: 5, 
 export const LOD_SETTINGS = [
   { skip: 0, seg: 1, round: true },
   { skip: 0.12, seg: 0.6, round: true },
-  { skip: 0.32, seg: 0.4, round: true },
-  { skip: 0.5, seg: 0.3, round: false }, // distant scenery: plain boxes, tiny parts dropped
+  { skip: 0.32, seg: 0.4, round: true, thin: 0.06 },
+  { skip: 0.5, seg: 0.3, round: false, thin: 0.1 }, // distant scenery: plain boxes, tiny parts dropped
 ];
 
 /**
@@ -108,6 +108,8 @@ export class MeshBuilder {
   /** Boxes are softly rounded by default (cartoon look); pass `sharp: true` to opt out. */
   box(w, h, d, color, o = {}) {
     if (this.skip(Math.max(w, h, d))) return this;
+    // grooves, mortar lines, thin trims: invisible at a distance
+    if (this.lod.thin && (w < this.lod.thin ? 1 : 0) + (h < this.lod.thin ? 1 : 0) + (d < this.lod.thin ? 1 : 0) >= 2) return this;
     const m = Math.min(w, h, d);
     let g;
     if (o.sharp || m < 0.05 || !this.lod.round) {
