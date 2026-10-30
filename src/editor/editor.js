@@ -34,7 +34,7 @@ export class MapEditor {
     if (!this.el) this.build();
     const s = loadSpec();
     this.spec = { v: 1, roads: JSON.parse(JSON.stringify(s.roads)), specials: JSON.parse(JSON.stringify(s.specials || [])) };
-    this.extra = { objects: s.objects || [], auto: s.auto !== false }; // hand-placed 3D objects are kept as they are
+    this.extra = { objects: s.objects || [], auto: s.auto !== false, plots: s.plots || [], hq: s.hq || { x: 0, z: 0, ry: 0 } }; // hand-placed 3D objects are kept as they are
     this.zones = decodeZones(s.zones);
     this.undoStack = [];
     this.cur = null;
@@ -233,7 +233,6 @@ export class MapEditor {
     } else if (this.tool === 'special') {
       const def = SPECIALS[this.specialKind];
       const [sx, sz] = [Math.round(x / SNAP) * SNAP, Math.round(z / SNAP) * SNAP];
-      if (Math.abs(sx) < CORE_HALF + def.w / 2 && Math.abs(sz) < CORE_HALF + def.d / 2) { this.flash('Le centre est réservé à tes commerces.'); return; }
       this.pushUndo();
       this.spec.specials.push({ kind: this.specialKind, x: sx, z: sz, ry: this.rot });
       this.draw();
@@ -317,19 +316,16 @@ export class MapEditor {
     g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 2; g.setLineDash([8, 6]);
     g.strokeRect(bx, by, 2 * WORLD_HALF * s, 2 * WORLD_HALF * s);
     g.setLineDash([]);
-    // playable district
-    const [cx0, cy0] = this.toScreen(-CORE_HALF, -CORE_HALF);
-    g.fillStyle = '#d6d0c6'; g.fillRect(cx0, cy0, 2 * CORE_HALF * s, 2 * CORE_HALF * s);
-    g.strokeStyle = '#8a8478'; g.lineWidth = Math.max(1.5, 4 * s);
-    g.beginPath();
-    for (const v of [-70, -50, -30, -10, 10, 30, 50, 70]) {
-      const [a, b] = this.toScreen(v, -70), [c2, d] = this.toScreen(v, 70); g.moveTo(a, b); g.lineTo(c2, d);
-      const [e, f] = this.toScreen(-70, v), [h, k] = this.toScreen(70, v); g.moveTo(e, f); g.lineTo(h, k);
-    }
-    g.stroke();
-    const [lx, ly] = this.toScreen(0, 0);
-    g.fillStyle = '#3d3a33'; g.font = `600 ${Math.max(11, Math.min(18, 7 * s))}px Fredoka, sans-serif`; g.textAlign = 'center';
-    g.fillText('Ton centre (fixe)', lx, ly + 5);
+    // building lots and HQ (edited in the 3D editor)
+    const rect = (o, w, d, fill) => {
+      const [x, y] = this.toScreen(o.x, o.z);
+      g.save(); g.translate(x, y); g.rotate(-(o.ry || 0));
+      g.fillStyle = fill; g.fillRect(-w / 2 * s, -d / 2 * s, w * s, d * s);
+      g.fillStyle = '#ffd166'; g.fillRect(-w / 2 * s, d / 2 * s - Math.max(1.5, 0.8 * s), w * s, Math.max(1.5, 0.8 * s));
+      g.restore();
+    };
+    for (const pl of this.extra.plots) rect(pl, 13, 13, pl.zone === 'ZI' ? '#9a9486' : '#c4bcad');
+    rect(this.extra.hq, 13, 13, '#f2c14e');
     // lines
     const all = this.cur ? [...this.spec.roads, this.cur] : this.spec.roads;
     for (const road of ['path', 'rail', 'sec', 'main', 'hwy'].flatMap((t) => all.filter((r) => r.type === t))) this.drawLine(road, road === this.cur);
@@ -476,12 +472,12 @@ export class MapEditor {
     else if (a === 'clear') {
       if (!confirm('Effacer toute la carte (zones, routes et monuments) ?')) return;
       this.pushUndo();
-      this.spec.roads = []; this.spec.specials = []; this.zones = emptyZones(); this.extra = { objects: [], auto: false };
+      this.spec.roads = []; this.spec.specials = []; this.zones = emptyZones(); this.extra = { ...this.extra, objects: [], auto: false, plots: [] };
     } else if (a === 'default') {
       if (!confirm('Remplacer par la carte par défaut ?')) return;
       this.pushUndo();
       const d = defaultSpec();
-      this.spec.roads = d.roads; this.spec.specials = d.specials; this.zones = decodeZones(d.zones); this.extra = { objects: [], auto: true };
+      this.spec.roads = d.roads; this.spec.specials = d.specials; this.zones = decodeZones(d.zones); this.extra = { objects: [], auto: true, plots: d.plots, hq: d.hq };
     } else if (a === 'export') this.exportJSON();
     else if (a === 'import') {
       const f = this.el.querySelector('#ed-file');
@@ -505,7 +501,7 @@ export class MapEditor {
   }
 
   currentSpec() {
-    return { v: 1, zones: encodeZones(this.zones), roads: this.spec.roads, specials: this.spec.specials, objects: this.extra.objects, auto: this.extra.auto };
+    return { v: 1, zones: encodeZones(this.zones), roads: this.spec.roads, specials: this.spec.specials, objects: this.extra.objects, auto: this.extra.auto, plots: this.extra.plots, hq: this.extra.hq };
   }
 
   exportJSON() {
@@ -527,7 +523,7 @@ export class MapEditor {
         this.spec.roads = d.roads.filter((r) => LINE_TYPES[r.type] && Array.isArray(r.pts));
         this.spec.specials = (d.specials || []).filter((s) => SPECIALS[s.kind]);
         this.zones = decodeZones(d.zones);
-        this.extra = { objects: Array.isArray(d.objects) ? d.objects : [], auto: d.auto !== false };
+        this.extra = { objects: Array.isArray(d.objects) ? d.objects : [], auto: d.auto !== false, plots: Array.isArray(d.plots) ? d.plots : this.extra.plots, hq: d.hq || this.extra.hq };
         this.renderPanel();
         this.draw();
       } catch (err) {

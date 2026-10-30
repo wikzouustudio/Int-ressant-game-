@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import {
   WORLD_HALF, ZCELL, ZN, CORE_HALF, ZONES, LINE_TYPES, CATALOG, CATALOG_ITEM, isTreeKind,
-  loadSpec, saveSpec, defaultSpec, emptySpec, decodeZones, encodeZones, inCoreCell, expandLine,
+  loadSpec, saveSpec, defaultSpec, emptySpec, decodeZones, encodeZones, inCoreCell, expandLine, PLOT_SIZE, defaultPlots, HQ_DEFAULT,
 } from '../world/mapspec.js';
+import { buildHQ } from '../models/buildings.js';
+import { BIZ } from '../game/config.js';
 import { buildObjectModel } from '../models/districts.js';
 import { LOTS, TREES, SPEC as LOADED_SPEC } from '../world/citymap.js';
 import { disposeObject } from '../models/builder.js';
@@ -44,7 +46,7 @@ export class MapEditor3D {
   open() {
     if (!this.el) this.buildUI();
     const s = loadSpec();
-    this.spec = JSON.parse(JSON.stringify({ roads: s.roads, objects: s.objects || [], auto: s.auto !== false }));
+    this.spec = JSON.parse(JSON.stringify({ roads: s.roads, objects: s.objects || [], auto: s.auto !== false, plots: s.plots || [], hq: s.hq || HQ_DEFAULT }));
     // landmarks of the 2D editor become ordinary objects here
     for (const sp of s.specials || []) this.spec.objects.push({ k: sp.kind, x: sp.x, z: sp.z, ry: sp.ry || 0, s: 1, seed: 7 });
     this.zones = decodeZones(s.zones);
@@ -54,6 +56,7 @@ export class MapEditor3D {
     this.game.editor = this;
     this.game.select(null);
     this.env.setCityVisible(false);
+    this.setGameVisible(false);
     this.root = new THREE.Group();
     this.root.name = 'editor3d';
     this.engine.scene.add(this.root);
@@ -75,13 +78,27 @@ export class MapEditor3D {
     disposeObject(this.root);
     this.root = null;
     this.env.setCityVisible(true);
+    this.setGameVisible(true);
     this.el.classList.add('hidden');
     document.body.classList.remove('editing');
   }
 
+  /** The live game board (lots, businesses, HQ) is replaced by its editable version. */
+  setGameVisible(on) {
+    const g = this.game;
+    for (const p of g.plots.values()) p.group.visible = on;
+    for (const b of g.buildings.values()) b.root.visible = on;
+    g.hq.visible = on;
+    if (g.hqPad) g.hqPad.visible = on;
+    if (!on) { g.selFrame.visible = false; g.hoverFrame.visible = false; }
+    if (g.goldenObj && !on) g.goldenObj.root.visible = false;
+  }
+
+  kindOf(o) { return !o ? null : o === this.spec.hq ? 'hq' : this.spec.plots.includes(o) ? 'plot' : 'obj'; }
+
   // ---------------------------------------------------------------------------
   snapshot() {
-    this.undoStack.push(JSON.stringify({ roads: this.spec.roads, objects: this.spec.objects, auto: this.spec.auto, zones: encodeZones(this.zones) }));
+    this.undoStack.push(JSON.stringify({ roads: this.spec.roads, objects: this.spec.objects, auto: this.spec.auto, plots: this.spec.plots, hq: this.spec.hq, zones: encodeZones(this.zones) }));
     if (this.undoStack.length > 40) this.undoStack.shift();
     this.dirty = true;
   }
@@ -90,14 +107,14 @@ export class MapEditor3D {
     const s = this.undoStack.pop();
     if (!s) return;
     const d = JSON.parse(s);
-    this.spec.roads = d.roads; this.spec.objects = d.objects; this.spec.auto = d.auto; this.zones = decodeZones(d.zones);
+    this.spec.roads = d.roads; this.spec.objects = d.objects; this.spec.auto = d.auto; this.spec.plots = d.plots; this.spec.hq = d.hq; this.zones = decodeZones(d.zones);
     this.select(null);
     this.rebuildAll();
     this.renderPanel();
   }
 
   currentSpec() {
-    return { v: 1, zones: encodeZones(this.zones), roads: this.spec.roads, specials: [], objects: this.spec.objects, auto: this.spec.auto };
+    return { v: 1, zones: encodeZones(this.zones), roads: this.spec.roads, specials: [], objects: this.spec.objects, auto: this.spec.auto, plots: this.spec.plots, hq: this.spec.hq };
   }
 
   // ---------------------------------------------------------------------------
@@ -168,7 +185,46 @@ export class MapEditor3D {
     this.root.add(this.roadLayer);
   }
 
+  plotGroup(pl) {
+    const g = new THREE.Group();
+    const ind = pl.zone === 'ZI';
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(PLOT_SIZE, 0.25, PLOT_SIZE).translate(0, 0.125, 0), new THREE.MeshStandardMaterial({ color: ind ? '#aaa397' : '#c4bcad', roughness: 0.9 }));
+    const lawn = new THREE.Mesh(new THREE.BoxGeometry(PLOT_SIZE - 0.7, 0.06, PLOT_SIZE - 0.7).translate(0, 0.25, 0), new THREE.MeshStandardMaterial({ color: ind ? '#8f9f4c' : '#5fa83a', roughness: 1 }));
+    const front = new THREE.Mesh(new THREE.BoxGeometry(PLOT_SIZE - 1, 0.1, 0.5).translate(0, 0.3, PLOT_SIZE / 2 - 0.6), new THREE.MeshBasicMaterial({ color: '#ffd166' }));
+    pad.receiveShadow = lawn.receiveShadow = true;
+    g.add(pad, lawn, front);
+    const live = this.game.plots.get(pl.id);
+    if (live?.building) {
+      // a business of your game stands here: it moves with its lot
+      const m = new THREE.Mesh(new THREE.BoxGeometry(9, 5, 8).translate(0, 2.75, -1), new THREE.MeshStandardMaterial({ color: BIZ[live.building.typeId].color, transparent: true, opacity: 0.8 }));
+      m.castShadow = true;
+      g.add(m);
+    }
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 0.15).translate(0, 1.4, 0), new THREE.MeshStandardMaterial({ color: ind ? '#5f6875' : '#16a34a' }));
+    sign.position.set(4.6, 0, 4.8);
+    g.add(sign);
+    return g;
+  }
+
+  hqGroup() {
+    const { group } = buildHQ();
+    group.position.y = 0.25;
+    const g = new THREE.Group();
+    const pad = new THREE.Mesh(new THREE.BoxGeometry(PLOT_SIZE, 0.25, PLOT_SIZE).translate(0, 0.125, 0), new THREE.MeshStandardMaterial({ color: '#e8e1d2', roughness: 0.9 }));
+    g.add(pad, group);
+    return g;
+  }
+
   objectGroup(o) {
+    const kind = this.kindOf(o);
+    if (kind === 'plot' || kind === 'hq') {
+      const g = kind === 'plot' ? this.plotGroup(o) : this.hqGroup();
+      g.position.set(o.x, 0, o.z);
+      g.rotation.y = o.ry || 0;
+      g.userData.obj = o;
+      g.traverse((m) => { if (m.isMesh) m.userData.obj = o; });
+      return g;
+    }
     const g = buildObjectModel({ kind: o.k, w: o.w || CATALOG_ITEM[o.k].w, d: o.d || CATALOG_ITEM[o.k].d, s: o.s || 1, seed: o.seed || 1 });
     g.position.set(o.x, 0, o.z);
     g.rotation.y = o.ry || 0;
@@ -186,11 +242,17 @@ export class MapEditor3D {
       this.groups.set(o, g);
       this.objLayer.add(g);
     }
+    for (const o of [...this.spec.plots, this.spec.hq]) {
+      const g = this.objectGroup(o);
+      this.groups.set(o, g);
+      this.objLayer.add(g);
+    }
   }
   refreshObject(o) {
     const old = this.groups.get(o);
     if (old) { this.objLayer.remove(old); disposeObject(old); }
-    if (!this.spec.objects.includes(o)) { this.groups.delete(o); return; }
+    if (!this.spec.objects.includes(o) && !this.kindOf(o).match(/plot|hq/)) { this.groups.delete(o); return; }
+    if (this.kindOf(o) === 'plot' && !this.spec.plots.includes(o)) { this.groups.delete(o); return; }
     if (isTreeKind(o.k)) { this.rebuildTrees(); return; }
     const g = this.objectGroup(o);
     this.groups.set(o, g);
@@ -291,7 +353,7 @@ export class MapEditor3D {
     }
     return null;
   }
-  inCore(x, z, r = 0) { return Math.abs(x) < CORE_HALF + r && Math.abs(z) < CORE_HALF + r; }
+  inCore() { return false; }
 
   newObject(x, z, ghost = false) {
     const def = CATALOG_ITEM[this.item];
@@ -310,7 +372,9 @@ export class MapEditor3D {
       if (this.tool === 'erase') {
         if (!hit) return;
         this.snapshot();
-        if (hit.obj) { this.spec.objects.splice(this.spec.objects.indexOf(hit.obj), 1); this.refreshObject(hit.obj); }
+        if (hit.obj && this.kindOf(hit.obj) === 'hq') { this.undoStack.pop(); return this.flash('Le siège est indispensable : déplace-le plutôt.'); }
+        if (hit.obj && this.kindOf(hit.obj) === 'plot') { this.spec.plots.splice(this.spec.plots.indexOf(hit.obj), 1); this.refreshObject(hit.obj); }
+        else if (hit.obj) { this.spec.objects.splice(this.spec.objects.indexOf(hit.obj), 1); this.refreshObject(hit.obj); }
         else { this.spec.roads.splice(this.spec.roads.indexOf(hit.road), 1); this.rebuildRoads(); }
         this.rebuildPreview();
         return;
@@ -319,6 +383,14 @@ export class MapEditor3D {
       return;
     }
     if (!p) return;
+    if (this.tool === 'lot') {
+      this.snapshot();
+      const pl = { id: 'p' + Date.now().toString(36) + ((Math.random() * 1e4) | 0), x: Math.round(p[0]), z: Math.round(p[1]), ry: this.rot, zone: this.lotZone || 'ZM' };
+      this.spec.plots.push(pl);
+      this.refreshObject(pl);
+      this.renderPanel();
+      return;
+    }
     if (this.tool === 'place') {
       const def = CATALOG_ITEM[this.item];
       if (this.inCore(p[0], p[1], Math.max(def.w, def.d) / 2)) return this.flash('Le centre est réservé à tes commerces.');
@@ -373,7 +445,7 @@ export class MapEditor3D {
       const o = this.selected;
       if (!this.inCore(p[0], p[1], 2)) { o.x = Math.round(p[0]); o.z = Math.round(p[1]); }
       const g = this.groups.get(o);
-      if (g) g.position.set(o.x, 0, o.z); else if (phase === 'end') this.rebuildTrees();
+      if (g) g.position.set(o.x, 0, o.z);
       this.rebuildPreview();
     }
     if (phase === 'end') {
@@ -461,7 +533,7 @@ export class MapEditor3D {
 
   renderPanel() {
     if (!this.body) return;
-    const tools = [['select', 'Sélection', 'pointer'], ['place', 'Placer', 'plus'], ['road', 'Routes', 'crane'], ['ground', 'Sol', 'apps'], ['erase', 'Gomme', 'close']]
+    const tools = [['select', 'Sélection', 'pointer'], ['place', 'Placer', 'plus'], ['lot', 'Terrains', 'pin'], ['road', 'Routes', 'crane'], ['ground', 'Sol', 'apps'], ['erase', 'Gomme', 'close']]
       .map(([id, name, ic]) => `<button class="ed-tool ${this.tool === id ? 'on' : ''}" data-e3="tool" data-id="${id}">${icon(ic)}<span>${name}</span></button>`).join('');
     let opts = '';
     if (this.tool === 'place') {
@@ -476,9 +548,19 @@ export class MapEditor3D {
       opts = `<div class="ed-label">Revêtement / zone</div><div class="ed-swatches">${GROUND_TOOLS.map((id) => { const z = ZONES.find((q) => q.id === id); return `<button class="ed-sw ${this.ground === id ? 'on' : ''}" data-e3="ground" data-id="${id}"><i style="background:${id === 'ped' ? '#cdbb9a' : z.color}"></i>${id === '' ? 'Herbe' : id === 'ped' ? 'Pavés (piéton)' : z.name}</button>`; }).join('')}</div>
         <div class="ed-label">Pinceau</div><div class="ed-row">${[1, 2, 3].map((b) => `<button class="ed-chip ${this.brush === b ? 'on' : ''}" data-e3="brush" data-id="${b}">${(2 * b - 1) * ZCELL} m</button>`).join('')}</div>
         <p class="ed-note">Les zones d'affaires, commerces, industrie et habitations servent au remplissage automatique.</p>`;
+    } else if (this.tool === 'lot') {
+      opts = `<div class="ed-label">Terrain constructible</div>
+        <div class="ed-row"><button class="ed-chip ${(this.lotZone || 'ZM') === 'ZM' ? 'on' : ''}" data-e3="lotzone" data-id="ZM">Zone mixte (commerces, bureaux)</button><button class="ed-chip ${this.lotZone === 'ZI' ? 'on' : ''}" data-e3="lotzone" data-id="ZI">Zone industrielle (usines, mine…)</button></div>
+        <div class="ed-row"><button class="ed-chip" data-e3="rot" data-id="-2">↺ 90°</button><button class="ed-chip" data-e3="rot" data-id="2">↻ 90°</button></div>
+        <p class="ed-note">Clique pour poser un terrain de 13 × 13 m où tu pourras acheter et construire. La bande jaune est la façade : tourne-la vers une rue, tes employés partent par là. Le siège se déplace avec l'outil Sélection.</p>`;
     } else if (this.tool === 'select') {
       const o = this.selected;
-      opts = o ? `<div class="ed-label">${CATALOG_ITEM[o.k]?.name || o.k}</div>
+      const kind = this.kindOf(o);
+      opts = kind === 'plot' || kind === 'hq' ? `<div class="ed-label">${kind === 'hq' ? 'Siège (Empire SA)' : `Terrain constructible · ${o.zone === 'ZI' ? 'zone industrielle' : 'zone mixte'}`}</div>
+        <div class="ed-row"><button class="ed-chip" data-e3="srot" data-id="-90">↺ 90°</button><button class="ed-chip" data-e3="srot" data-id="90">↻ 90°</button><button class="ed-chip" data-e3="srot" data-id="15">↻ 15°</button></div>
+        ${kind === 'plot' ? `<div class="ed-row"><button class="ed-chip" data-e3="pzone">Changer de zone</button><button class="ed-chip" data-e3="dup">Dupliquer</button><button class="ed-chip red" data-e3="del">Supprimer</button></div>` : ''}
+        <p class="ed-note">Glisse pour déplacer${kind === 'plot' ? ' (ton commerce suit son terrain)' : ''}.</p>`
+        : o ? `<div class="ed-label">${CATALOG_ITEM[o.k]?.name || o.k}</div>
         <div class="ed-row"><button class="ed-chip" data-e3="srot" data-id="-15">↺ 15°</button><button class="ed-chip" data-e3="srot" data-id="15">↻ 15°</button><button class="ed-chip" data-e3="srot" data-id="90">↻ 90°</button></div>
         <div class="ed-row"><button class="ed-chip" data-e3="scale" data-id="0.9">Plus petit</button><button class="ed-chip" data-e3="scale" data-id="1.1">Plus grand</button><span class="ed-note">× ${(o.s || 1).toFixed(2)}</span></div>
         <div class="ed-row"><button class="ed-chip" data-e3="vary">Varier le modèle</button><button class="ed-chip" data-e3="dup">Dupliquer</button><button class="ed-chip red" data-e3="del">Supprimer</button></div>
@@ -530,7 +612,15 @@ export class MapEditor3D {
     else if (a === 'srot') this.transformSelected((o) => { o.ry = ((o.ry || 0) + ((+id) * Math.PI) / 180) % (Math.PI * 2); });
     else if (a === 'scale') this.transformSelected((o) => { o.s = Math.min(4, Math.max(0.3, (o.s || 1) * +id)); });
     else if (a === 'vary') this.transformSelected((o) => { o.seed = (Math.random() * 1e9) | 0; });
-    else if (a === 'dup') {
+    else if (a === 'lotzone') this.lotZone = id;
+    else if (a === 'pzone') this.transformSelected((o) => { o.zone = o.zone === 'ZI' ? 'ZM' : 'ZI'; });
+    else if (a === 'dup' && this.kindOf(this.selected) === 'plot') {
+      const o = this.selected;
+      this.snapshot();
+      const c = { ...o, id: 'p' + Date.now().toString(36) + ((Math.random() * 1e4) | 0), x: o.x + 20 };
+      this.spec.plots.push(c); this.refreshObject(c); this.select(c);
+      return;
+    } else if (a === 'dup') {
       const o = this.selected; if (!o) return;
       this.snapshot();
       const c = { ...o, x: o.x + Math.max(4, (CATALOG_ITEM[o.k]?.w || 4) * (o.s || 1) + 2), seed: (Math.random() * 1e9) | 0 };
@@ -538,8 +628,12 @@ export class MapEditor3D {
       return;
     } else if (a === 'del') {
       const o = this.selected; if (!o) return;
+      if (this.kindOf(o) === 'hq') return;
+      if (this.kindOf(o) === 'plot' && this.game.plots.get(o.id)?.building && !confirm('Un de tes commerces est sur ce terrain : il sera revendu. Continuer ?')) return;
       this.snapshot();
-      this.spec.objects.splice(this.spec.objects.indexOf(o), 1); this.refreshObject(o); this.select(null);
+      if (this.kindOf(o) === 'plot') this.spec.plots.splice(this.spec.plots.indexOf(o), 1);
+      else this.spec.objects.splice(this.spec.objects.indexOf(o), 1);
+      this.refreshObject(o); this.select(null);
       return;
     } else if (a === 'undo') this.undo();
     else if (a === 'auto') { this.snapshot(); this.spec.auto = !this.spec.auto; }
@@ -550,14 +644,14 @@ export class MapEditor3D {
       if (!confirm('Revenir à la ville par défaut ?')) return;
       this.snapshot();
       const d = defaultSpec();
-      this.spec = { roads: d.roads, objects: d.specials.map((sp) => ({ k: sp.kind, x: sp.x, z: sp.z, ry: sp.ry, s: 1, seed: 7 })), auto: true };
+      this.spec = { roads: d.roads, objects: d.specials.map((sp) => ({ k: sp.kind, x: sp.x, z: sp.z, ry: sp.ry, s: 1, seed: 7 })), auto: true, plots: defaultPlots(), hq: { ...HQ_DEFAULT } };
       this.zones = decodeZones(d.zones);
       this.select(null); this.rebuildAll();
     } else if (a === 'empty') {
-      if (!confirm('Tout effacer et partir d\'un monde vide ?')) return;
+      if (!confirm('Tout effacer et partir d\'un monde vide ?\n(Seul le siège reste. Pose des terrains pour pouvoir construire tes commerces.)')) return;
       this.snapshot();
       const d = emptySpec();
-      this.spec = { roads: [], objects: [], auto: false };
+      this.spec = { roads: [], objects: [], auto: false, plots: [], hq: { ...this.spec.hq } };
       this.zones = decodeZones(d.zones);
       this.select(null); this.rebuildAll();
     } else if (a === 'plan') {

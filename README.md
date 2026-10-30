@@ -38,6 +38,10 @@ Le bouton **carte** en haut à droite ouvre l'**éditeur 3D**, directement dans 
   voitures, bacs à fleurs, arrêts de bus, kiosques (rotation Q / E).
 - **Sélection** : glisse un objet pour le déplacer, pivote-le, agrandis-le, varie son modèle, duplique-le ou supprime-le.
 - **Routes** (avenues, rues, autoroute, chemins, voie ferrée), **Sol** (pavés, eau, champs, zones), **Gomme**, annuler.
+- **Terrains** : pose, déplace, tourne ou supprime les terrains constructibles (zone mixte ou industrielle)
+  et déplace le **siège**. Les rues du centre sont des routes comme les autres : tout peut être redessiné.
+  Tes commerces suivent leur terrain ; ceux dont le terrain est supprimé sont revendus. Les employés
+  trouvent leur chemin sur n'importe quel réseau de rues et de chemins.
 - **Monde vide** pour tout refaire de zéro, ou **Rendre la ville actuelle modifiable** pour retoucher chaque
   bâtiment et chaque arbre de la ville générée. Le **remplissage automatique** peut être activé ou coupé.
 

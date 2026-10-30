@@ -29,8 +29,8 @@ export const zoneIndex = (id) => Math.max(0, ZONES.findIndex((z) => z.id === id)
 
 /** Road kinds the editor can draw. */
 export const LINE_TYPES = {
-  main: { name: 'Avenue', width: 8 },
-  sec: { name: 'Rue', width: 6.8 },
+  main: { name: 'Avenue', width: 7 },
+  sec: { name: 'Rue', width: 7 },
   hwy: { name: 'Autoroute', width: 12.2 },
   path: { name: 'Chemin piéton', width: 2.6 },
   rail: { name: 'Voie ferrée', width: 4.6 },
@@ -77,7 +77,8 @@ export const isTreeKind = (k) => k === 'tree' || k === 'pine';
 // ---------------------------------------------------------------------------
 export function emptyZones() { return new Uint8Array(ZN * ZN); }
 export const cellOf = (x, z) => [Math.floor((x + WORLD_HALF) / ZCELL), Math.floor((z + WORLD_HALF) / ZCELL)];
-export const inCoreCell = (i, j) => {
+export const inCoreCell = () => false;
+const inDefaultCore = (i, j) => {
   const x0 = i * ZCELL - WORLD_HALF, z0 = j * ZCELL - WORLD_HALF;
   return x0 + ZCELL > -CORE_HALF && x0 < CORE_HALF && z0 + ZCELL > -CORE_HALF && z0 < CORE_HALF;
 };
@@ -97,7 +98,7 @@ function fillRect(grid, x0, z0, x1, z1, id) {
   for (let x = Math.min(x0, x1); x < Math.max(x0, x1); x += ZCELL) {
     for (let z = Math.min(z0, z1); z < Math.max(z0, z1); z += ZCELL) {
       const [i, j] = cellOf(x + 0.5, z + 0.5);
-      if (i >= 0 && j >= 0 && i < ZN && j < ZN && !inCoreCell(i, j)) grid[j * ZN + i] = v;
+      if (i >= 0 && j >= 0 && i < ZN && j < ZN && !inDefaultCore(i, j)) grid[j * ZN + i] = v;
     }
   }
 }
@@ -193,18 +194,52 @@ export function defaultSpec() {
     { kind: 'farmhouse', x: -235, z: 230, ry: 0 },
     { kind: 'playground', x: 255, z: -132, ry: 0 },
   ];
-  return { v: 1, zones: encodeZones(z), roads, specials, objects: [], auto: true };
+  return { v: 1, zones: encodeZones(z), roads: [...defaultCoreRoads(), ...roads], specials, objects: [], auto: true, plots: defaultPlots(), hq: { ...HQ_DEFAULT } };
 }
 
 /** A blank world: grass only, nothing generated. */
 export function emptySpec() {
-  return { v: 1, zones: encodeZones(emptyZones()), roads: [], specials: [], objects: [], auto: false };
+  return { v: 1, zones: encodeZones(emptyZones()), roads: [], specials: [], objects: [], auto: false, plots: [], hq: { x: 0, z: 0, ry: 0 } };
+}
+
+// ---------------------------------------------------------------------------
+// The playable district: building lots ("terrains constructibles"), HQ, its streets.
+// Everything is editable; ids of the default lots keep the old "i,j" keys so saves
+// made before the editor still match.
+// ---------------------------------------------------------------------------
+export const PLOT_SIZE = 13;
+export const HQ_DEFAULT = { x: 0, z: 0, ry: 0 };
+export function defaultPlots() {
+  const plots = [];
+  for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) {
+    if (i === 0 && j === 0) continue;
+    plots.push({ id: `${i},${j}`, x: i * 20, z: j * 20, ry: 0, zone: Math.abs(i) === 3 || j === -3 ? 'ZI' : 'ZM' });
+  }
+  return plots;
+}
+export function defaultCoreRoads() {
+  const roads = [];
+  for (const v of [-70, -50, -30, -10, 10, 30, 50, 70]) {
+    const type = Math.abs(v) === 10 || Math.abs(v) === 70 ? 'main' : 'sec';
+    roads.push({ type, pts: [[-70, v], [70, v]] }, { type, pts: [[v, -70], [v, 70]] });
+  }
+  return roads;
+}
+/** Older saved maps had a fixed district: give them its lots, HQ and streets. */
+function upgradeSpec(s) {
+  if (!Array.isArray(s.plots)) {
+    s.plots = defaultPlots();
+    s.hq = { ...HQ_DEFAULT };
+    s.roads = [...defaultCoreRoads(), ...s.roads];
+  }
+  s.hq ||= { ...HQ_DEFAULT };
+  return s;
 }
 
 export function loadSpec() {
   try {
     const s = JSON.parse(localStorage.getItem(MAP_KEY) || 'null');
-    if (s && s.v === 1 && Array.isArray(s.roads)) return s;
+    if (s && s.v === 1 && Array.isArray(s.roads)) return upgradeSpec(s);
   } catch (e) { /* storage unavailable or corrupt */ }
   return defaultSpec();
 }

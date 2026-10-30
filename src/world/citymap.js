@@ -1,7 +1,6 @@
 import { rng } from '../models/builder.js';
-import { CELL, PLAY_HALF } from '../game/config.js';
 import {
-  WORLD_HALF, ZCELL, ZN, CORE_HALF, ZONES, SPECIALS, CATALOG_ITEM, HOUSE_LIST, isTreeKind, loadSpec, decodeZones, expandLine, linePts, curvePts,
+  WORLD_HALF, ZCELL, ZN, PLOT_SIZE, ZONES, SPECIALS, CATALOG_ITEM, HOUSE_LIST, isTreeKind, loadSpec, decodeZones, expandLine, linePts, curvePts,
 } from './mapspec.js';
 
 // City plan around the playable district. It comes from the map edited in the in-game
@@ -11,26 +10,25 @@ import {
 // districts.js and used by the traffic and pedestrian simulations.
 
 export { WORLD_HALF, linePts, curvePts };
-const CORE = PLAY_HALF;         // centreline of the playable district's edge roads
-const CORE_EDGE = CORE_HALF;    // outer edge of its sidewalks
 
 /** Road cross-sections: c = half carriageway, sw = sidewalk width, lanes = offsets right of the centreline. */
 export const ROAD_TYPES = {
   core: { c: 2, sw: 1.5, lanes: [1.0], main: true },
-  main: { c: 2.4, sw: 1.6, lanes: [1.2], main: true },
-  sec: { c: 2.0, sw: 1.4, lanes: [1.0], main: false },
+  main: { c: 2.3, sw: 1.2, lanes: [1.15], main: true },
+  sec: { c: 2.0, sw: 1.5, lanes: [1.0], main: false },
   hwy: { c: 5.6, sw: 0, lanes: [1.5, 4.1], main: true },
 };
 
 export const ZONE_INFO = Object.fromEntries(ZONES.map((z) => [z.id || 'wild', z.name]));
-ZONE_INFO.core = 'Centre (terrains constructibles)';
 
 export const SPEC = loadSpec();
 const AUTO = SPEC.auto !== false;   // fill streets with buildings and plant trees automatically
 const GRIDZ = decodeZones(SPEC.zones);
+/** Building lots of the playable district and the HQ, as placed in the editor. */
+export const PLOTS = SPEC.plots || [];
+export const HQ = SPEC.hq || { x: 0, z: 0, ry: 0 };
 
 export function zoneAt(x, z) {
-  if (Math.abs(x) <= CORE_EDGE && Math.abs(z) <= CORE_EDGE) return 'core';
   const i = Math.floor((x + WORLD_HALF) / ZCELL), j = Math.floor((z + WORLD_HALF) / ZCELL);
   if (i < 0 || j < 0 || i >= ZN || j >= ZN) return 'wild';
   return ZONES[GRIDZ[j * ZN + i]].id || 'wild';
@@ -108,8 +106,6 @@ export const LOTS = [];        // generated buildings: {kind, x, z, ry, w, d, zo
 export const TREES = [];       // [x, z, kind 'round' | 'pine', scale]
 export const WATER_CELLS = []; // [x0, z0] corners of 10 m water cells
 export const FIELDS = [];      // farmland plots: {x, z, w, d, ry, color}
-export const CORE_LINES = [];  // core boulevards used by the traffic graph
-export const CORE_EXITS = new Set(); // `${axis}|${line}|${side}`: district streets that leave the playable area
 
 let rid = 0;
 function road(pts, type, closed = false) {
@@ -118,7 +114,7 @@ function road(pts, type, closed = false) {
   return r;
 }
 // lines may not cross the playable district (they stop on its edge road) nor leave the map
-const outsideCore = (x, z) => !(Math.abs(x) < CORE - 0.5 && Math.abs(z) < CORE - 0.5) && Math.abs(x) <= WORLD_HALF + 20 && Math.abs(z) <= WORLD_HALF + 20;
+const outsideCore = (x, z) => Math.abs(x) <= WORLD_HALF + 20 && Math.abs(z) <= WORLD_HALF + 20;
 function clipLine(line) {
   const pts = expandLine(line, 2);
   if (pts.length < 2) return [];
@@ -128,12 +124,6 @@ function clipLine(line) {
 }
 
 function generate() {
-  // --- core boulevards (drawn by the street grid, listed here for the traffic graph)
-  for (const v of [-CORE, -CELL / 2, CELL / 2, CORE]) {
-    CORE_LINES.push({ pts: linePts(-CORE, v, CORE, v, 10), type: 'core' });
-    CORE_LINES.push({ pts: linePts(v, -CORE, v, CORE, 10), type: 'core' });
-  }
-
   // --- drawn lines
   for (const line of SPEC.roads) {
     for (const part of clipLine(line)) {
@@ -142,23 +132,10 @@ function generate() {
       else if (ROAD_TYPES[line.type]) road(part.pts, line.type, part.closed);
     }
   }
-  // which core streets continue outside (for the sidewalks / crossings of the edge roads)
-  const lines = [-50, -30, -10, 10, 30, 50];
-  for (const r of ROADS_NET) {
-    if (r.closed) continue;
-    for (const p of [r.pts[0], r.pts[r.pts.length - 1]]) {
-      for (const side of [-1, 1]) {
-        for (const v of lines) {
-          if (Math.abs(p[1] - side * CORE) < 4 && Math.abs(p[0] - v) < 3) CORE_EXITS.add(`x|${v}|${side}`);
-          if (Math.abs(p[0] - side * CORE) < 4 && Math.abs(p[1] - v) < 3) CORE_EXITS.add(`z|${v}|${side}`);
-        }
-      }
-    }
-  }
-
   for (const r of ROADS_NET) markPoly(r.pts, r.t.c + r.t.sw);
-  for (const l of CORE_LINES) markPoly(l.pts, 4);
-  for (let x = -CORE_EDGE; x <= CORE_EDGE; x += OC) for (let z = -CORE_EDGE; z <= CORE_EDGE; z += OC) markDisc(x, z, 0.5, 3);
+  // the player's lots and the HQ are never built over
+  for (const p of PLOTS) markRect(p.x, p.z, PLOT_SIZE + 1, PLOT_SIZE + 1, p.ry || 0, 3);
+  markRect(HQ.x, HQ.z, PLOT_SIZE + 1, PLOT_SIZE + 1, HQ.ry || 0, 3);
   for (const rl of RAILS) markPoly(rl.closed ? [...rl.pts, rl.pts[0]] : rl.pts, 3.4, 3);
   for (const p of PATHS) markPoly(p.closed ? [...p.pts, p.pts[0]] : p.pts, p.w / 2 + 0.8, 1);
 
@@ -236,11 +213,6 @@ function generate() {
   if (AUTO) {
     for (const p of PATHS) placeAlong(p.closed ? [...p.pts, p.pts[0]] : p.pts, 2.6, { ped: true, only: 'ped' });
     for (const rd of ROADS_NET) if (rd.type !== 'hwy') placeAlong(rd.closed ? [...rd.pts, rd.pts[0]] : rd.pts, rd.t.c + rd.t.sw);
-    // rows facing the playable district, along its edge roads
-    placeAlong(linePts(-CORE, CORE, CORE, CORE, 2), 3.6, { sides: [-1] });
-    placeAlong(linePts(CORE, -CORE, CORE, CORE, 2), 3.6, { sides: [-1] });
-    placeAlong(linePts(-CORE, CORE, -CORE, -CORE, 2), 3.6, { sides: [-1] });
-    placeAlong(linePts(-CORE, -CORE, CORE, -CORE, 2), 3.6, { sides: [1] });
   }
 
   // --- trees: forests, park groves, gardens and the countryside
@@ -436,7 +408,7 @@ export function buildGraph(lines, ext = 2.5, merge = 2.5) {
 let roadGraph = null, pedGraph = null;
 /** Traffic graph: core boulevards + every district road. */
 export function getRoadGraph() {
-  if (!roadGraph) roadGraph = buildGraph([...CORE_LINES, ...ROADS_NET]);
+  if (!roadGraph) roadGraph = buildGraph(ROADS_NET);
   return roadGraph;
 }
 /** Pedestrian graph: old-town alleys, park paths and promenades. */

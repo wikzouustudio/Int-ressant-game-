@@ -1,14 +1,13 @@
 import * as THREE from 'three';
 import { MeshBuilder, rng } from '../models/builder.js';
-import { ROADS_NET, PATHS, RAILS, WATER_CELLS, zoneAt, CORE_LINES, isWater } from './citymap.js';
+import { ROADS_NET, PATHS, RAILS, WATER_CELLS, zoneAt, isWater, getRoadGraph, ROAD_TYPES } from './citymap.js';
 import { ZCELL } from './mapspec.js';
-import { PLAY_HALF, ROAD_Y } from '../game/config.js';
+import { ROAD_Y } from '../game/config.js';
 
 // Geometry for the district road network: curved carriageways, raised sidewalks with
 // curbs (cut open at junctions), centre lines, motorway barriers, footpaths, the
 // railway, the paved old town and turning circles. A few merged meshes in total.
 
-const CORE_LIM = PLAY_HALF + 3.5;
 const Y_MAIN = 0.075, Y_SEC = 0.05;
 
 /** Simple growable geometry accumulator (positions + normals + uvs). */
@@ -87,14 +86,13 @@ export function onOtherRoad(x, z, id, margin = 0.3) {
   for (const s of list) if (s.id !== id && segDist(x, z, s) < s.half + margin) return true;
   return false;
 }
-const inCore = (x, z) => Math.abs(x) < CORE_LIM && Math.abs(z) < CORE_LIM;
+const inCore = () => false;
 
 let indexed = false;
 function ensureIndex() {
   if (indexed) return;
   indexed = true;
   for (const r of ROADS_NET) indexLine(r.pts, r.closed, r.t.c, r.id);
-  CORE_LINES.forEach((l, k) => indexLine(l.pts, false, 2, 'core' + k));
 }
 
 export function buildRoadNetwork(renderer, paveTex) {
@@ -164,6 +162,33 @@ export function buildRoadNetwork(renderer, paveTex) {
             lamps.push([lx, lz, Math.atan2(-f[3] * s, f[2] * s)]);
           }
         }
+      }
+    }
+  }
+
+  // zebra crossings on every arm of each junction
+  const G = getRoadGraph();
+  for (const node of G.nodes) {
+    if (node.edges.length < 3) continue;
+    let wmax = 0;
+    for (const e of node.edges) wmax = Math.max(wmax, ROAD_TYPES[e.line.type].c + ROAD_TYPES[e.line.type].sw);
+    for (const e of node.edges) {
+      const t = ROAD_TYPES[e.line.type];
+      if (t.sw === 0) continue; // no crossings on the motorway
+      const from = e.a === node ? e.pts : [...e.pts].reverse();
+      // point at distance wmax + 0.9 along the arm
+      let d = wmax + 0.9, k = 1, px = from[0][0], pz = from[0][1], dx = 0, dz = 1;
+      while (k < from.length) {
+        const sx = from[k][0] - from[k - 1][0], sz = from[k][1] - from[k - 1][1], l = Math.hypot(sx, sz);
+        if (l >= d) { dx = sx / l; dz = sz / l; px = from[k - 1][0] + dx * d; pz = from[k - 1][1] + dz * d; break; }
+        d -= l; k++;
+      }
+      if (k >= from.length) continue;
+      const nx = -dz, nz = dx, yy = (e.line.type === 'sec' ? Y_SEC : Y_MAIN) + 0.013;
+      for (let q = -t.c + 0.35; q <= t.c - 0.3; q += 0.75) {
+        const cx = px + nx * q, cz = pz + nz * q;
+        marks.quad([cx - dx * 0.45 - nx * 0.19, yy, cz - dz * 0.45 - nz * 0.19], [cx + dx * 0.45 - nx * 0.19, yy, cz + dz * 0.45 - nz * 0.19],
+          [cx + dx * 0.45 + nx * 0.19, yy, cz + dz * 0.45 + nz * 0.19], [cx - dx * 0.45 + nx * 0.19, yy, cz - dz * 0.45 + nz * 0.19], up);
       }
     }
   }

@@ -2,22 +2,10 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { MeshBuilder, rng } from '../models/builder.js';
 import { setNightLevel } from '../models/materials.js';
-import { CELL, GRID, ROAD_Y, PLAY_HALF, ROAD_W, CARRIAGE, isMainRoad } from '../game/config.js';
+import { ROAD_Y } from '../game/config.js';
 import { buildDistricts } from '../models/districts.js';
 import { buildRoadNetwork, buildTrain } from './roadmesh.js';
-import { TREES, WORLD_HALF, isWater, CORE_EXITS } from './citymap.js';
-
-const LAMP_RY = -Math.PI / 4;
-// Street grid of the playable district (x = const and z = const lines, boundary roads
-// included). The districts around it have their own curved network (citymap.js).
-export const ROADS = [];
-for (let k = -GRID - 1; k <= GRID; k++) ROADS.push((k + 0.5) * CELL);
-export const ROADS_X = ROADS;
-export const ROADS_Z = ROADS;
-/** Road lines that lie inside the playable district (golden briefcases, events). */
-export const PLAY_ROADS = ROADS.filter((v) => Math.abs(v) <= PLAY_HALF + 0.1);
-/** Avenues that continue out of the district: [line, side] → true (side = ±1 towards the outside). */
-const continues = (axis, v, side) => CORE_EXITS.has(`${axis}|${v}|${side}`);
+import { TREES, WORLD_HALF, isWater } from './citymap.js';
 
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -117,113 +105,18 @@ export function createEnvironment(engine) {
   ground.receiveShadow = true;
   root.add(ground);
 
-  // ---------------- Streets: asphalt carriageways, raised sidewalks, markings ----------------
   const paveTex = makePavingTexture(renderer);
-  const span = 2 * PLAY_HALF + CARRIAGE;
-  const H_ASPH = 0.06;
-  const asphMain = [], asphSec = [], walks = [], curbs = [], marks = [];
-  const box = (list, x, y, z, w, h, d) => {
-    const g = new THREE.BoxGeometry(w, h, d);
-    g.translate(x, y + h / 2, z);
-    list.push(g);
-  };
-  const half = ROAD_W / 2, ch = CARRIAGE / 2, sw = (ROAD_W - CARRIAGE) / 2;
-  for (const v of ROADS) {
-    const main = isMainRoad(v);
-    box(main ? asphMain : asphSec, 0, 0, v, span, H_ASPH, CARRIAGE);
-    box(main ? asphMain : asphSec, v, 0, 0, CARRIAGE, H_ASPH, span);
-  }
-  // sidewalks run between intersections; corner squares join them
-  const last = ROADS.length - 1;
-  for (const v of ROADS) {
-    // outer side of the boundary roads: one continuous sidewalk, open only where an avenue leaves
-    const edge = v === ROADS[0] ? -1 : v === ROADS[last] ? 1 : 0;
-    if (edge) {
-      const off = v + edge * (ch + sw / 2), coff = v + edge * (ch + 0.06);
-      for (const horiz of [true, false]) {
-        // horiz: road z = v (its sidewalk runs along x), open where an avenue x = w leaves the district
-        const cuts = [-PLAY_HALF - ch - sw, ...ROADS.filter((w) => continues(horiz ? 'x' : 'z', w, edge)).flatMap((w) => [w - ch, w + ch]), PLAY_HALF + ch + sw];
-        for (let q = 0; q < cuts.length; q += 2) {
-          const len = cuts[q + 1] - cuts[q], mid = (cuts[q] + cuts[q + 1]) / 2;
-          if (horiz) { box(walks, mid, 0, off, len, ROAD_Y, sw); box(curbs, mid, 0, coff, len, ROAD_Y + 0.02, 0.12); }
-          else { box(walks, off, 0, mid, sw, ROAD_Y, len); box(curbs, coff, 0, mid, 0.12, ROAD_Y + 0.02, len); }
-        }
-      }
-    }
-    for (let k = 0; k < ROADS.length - 1; k++) {
-      const a0 = ROADS[k] + ch, a1 = ROADS[k + 1] - ch, len = a1 - a0, mid = (a0 + a1) / 2;
-      for (const side of [-1, 1]) {
-        if (side === edge) continue;
-        const off = v + side * (ch + sw / 2);
-        box(walks, mid, 0, off, len, ROAD_Y, sw);
-        box(walks, off, 0, mid, sw, ROAD_Y, len);
-        box(curbs, mid, 0, v + side * (ch + 0.06), len, ROAD_Y + 0.02, 0.12);
-        box(curbs, v + side * (ch + 0.06), 0, mid, 0.12, ROAD_Y + 0.02, len);
-      }
-    }
-  }
-  for (const x of ROADS) for (const z of ROADS) {
-    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-      const cx = x + sx * (ch + sw / 2), cz = z + sz * (ch + sw / 2);
-      if (Math.abs(cx) > PLAY_HALF + ch || Math.abs(cz) > PLAY_HALF + ch) continue; // drawn by the outer sidewalk
-      box(walks, cx, 0, cz, sw, ROAD_Y, sw);
-    }
-  }
-  // markings: dashed centre line on main roads, zebra crossings at every intersection
-  for (const v of ROADS) {
-    const main = isMainRoad(v);
-    for (let k = 0; k < ROADS.length - 1; k++) {
-      const a0 = ROADS[k] + half + 0.6, a1 = ROADS[k + 1] - half - 0.6;
-      if (main) for (let t = a0 + 1; t < a1 - 1; t += 3) { box(marks, t, H_ASPH, v, 1.6, 0.012, 0.16); box(marks, v, H_ASPH, t, 0.16, 0.012, 1.6); }
-    }
-    for (const w of ROADS) {
-      // crossings on the arms of intersection (v, w) that lead somewhere
-      for (const side of [-1, 1]) {
-        const out = Math.abs(v) === PLAY_HALF && Math.sign(v) === side;
-        for (let q = -1.5; q <= 1.5; q += 0.75) {
-          if (!out || continues('z', w, side)) box(marks, v + side * (half + 0.5), H_ASPH, w + q, 0.9, 0.012, 0.38);
-          if (!out || continues('x', w, side)) box(marks, w + q, H_ASPH, v + side * (half + 0.5), 0.38, 0.012, 0.9);
-        }
-      }
-    }
-  }
-  const mk = (list, mat) => { const m = new THREE.Mesh(mergeBoxes(list), mat); m.receiveShadow = true; root.add(m); return m; };
-  mk(asphMain, new THREE.MeshStandardMaterial({ color: '#4a4f57', roughness: 0.95 }));
-  mk(asphSec, new THREE.MeshStandardMaterial({ color: '#61666e', roughness: 0.95 }));
-  const walkMesh = mk(walks, new THREE.MeshStandardMaterial({ map: paveTex, roughness: 0.9 }));
-  const wp = walkMesh.geometry.attributes.position, wuv = walkMesh.geometry.attributes.uv;
-  for (let i = 0; i < wp.count; i++) wuv.setXY(i, wp.getX(i) / 2.2, wp.getZ(i) / 2.2);
-  mk(curbs, new THREE.MeshStandardMaterial({ color: '#c9c3b8', roughness: 0.8 }));
-  mk(marks, new THREE.MeshStandardMaterial({ color: '#f1f3f5', roughness: 0.7 }));
 
   // ---------------- Districts around the playable city ----------------
   const network = buildRoadNetwork(renderer, paveTex);
   root.add(network.group);
   const districts = buildDistricts();
   root.add(districts.group);
-  const street = buildStreetscape();
-  root.add(street);
   const train = buildTrain();
   root.add(train.group);
 
   // ---------------- Street lamps (instanced) ----------------
   const lampPos = [];
-  const rl = rng(77);
-  const lampOff = ROAD_W / 2 - 0.35;
-  for (const v of ROADS) {
-    const main = isMainRoad(v);
-    for (let k = 0; k < ROADS.length - 1; k++) {
-      const a0 = ROADS[k] + 4, a1 = ROADS[k + 1] - 4;
-      const step = main ? 7 : 12;
-      for (let t = a0 + (main ? 0 : rl() * 4); t <= a1; t += step) {
-        for (const side of main ? [-1, 1] : [rl() < 0.5 ? -1 : 1]) {
-          // horizontal street (z = v) and vertical street (x = v); arm points at the carriageway
-          if (!(Math.abs(v) === PLAY_HALF && Math.sign(v) === side)) lampPos.push([t, v + side * lampOff, side > 0 ? -Math.PI / 2 : Math.PI / 2]);
-          if ((main || rl() < 0.6) && !(Math.abs(v) === PLAY_HALF && Math.sign(v) === side)) lampPos.push([v + side * lampOff, t, side > 0 ? 0 : Math.PI]);
-        }
-      }
-    }
-  }
   lampPos.push(...network.lamps);
   const lb = new MeshBuilder();
   lb.cyl(0.22, 0.3, 0.4, '#2b2f36', { mat: 'metal' }, 7);
@@ -554,104 +447,6 @@ function mergeBoxes(list) {
   out.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   out.setIndex(new THREE.BufferAttribute(idx, 1));
   return out;
-}
-
-// ---------------------------------------------------------------------------
-// Street life: irregular street trees, benches, bins, bus stops, parked cars and flower
-// beds along the road edges (kept to the outer 0.6 m so pedestrians walk freely).
-// ---------------------------------------------------------------------------
-function buildStreetscape() {
-  const r = rng(4242);
-  const group = new THREE.Group();
-  const EDGE = ROAD_W / 2 - 0.4;
-  const trees = [];
-  const props = new MeshBuilder({ lod: 1 });
-  const carColors = ['#e0573f', '#4b8fd8', '#f2c14e', '#f8f9fa', '#2e3440', '#3bb3a8', '#8b5cf6'];
-  // Tree-lined avenues: every third road line in each direction. Trees always stand in a
-  // continuous grass strip with curbs; ordinary streets only get street furniture.
-  const isAvenue = (idx) => isMainRoad(ROADS[idx]);
-  ROADS.forEach((v, idx) => {
-    for (let k = 0; k < ROADS.length - 1; k++) {
-      const a = ROADS[k] + 3.2, b = ROADS[k + 1] - 3.2; // segment between two intersections
-      for (const horizontal of [true, false]) {
-        const ry = horizontal ? 0 : Math.PI / 2;
-        if (isAvenue(idx)) {
-          const len = b - a, mid = (a + b) / 2;
-          for (const side of [-1, 1]) {
-            const off = v + side * EDGE;
-            props.group({ x: horizontal ? mid : off, z: horizontal ? off : mid, ry }, () => {
-              props.box(len, 0.08, 0.8, '#6fae3d', { y: ROAD_Y - 0.02, sharp: true });
-              props.box(len, 0.12, 0.08, '#c9c3b8', { y: ROAD_Y - 0.02, z: 0.44, sharp: true });
-              props.box(len, 0.12, 0.08, '#c9c3b8', { y: ROAD_Y - 0.02, z: -0.44, sharp: true });
-              for (let q = 0; q < len / 2.2; q++) if (r() < 0.35) props.sphere(0.07, ['#ffffff', '#ffd43b', '#ff8fab'][q % 3], { x: -len / 2 + q * 2.2 + r(), y: ROAD_Y + 0.08, z: (r() - 0.5) * 0.5 }, 5, 3);
-            });
-            const n = Math.max(1, Math.round(len / 6));
-            for (let q = 0; q < n; q++) {
-              const t = a + (q + 0.5) * (len / n) + (r() - 0.5) * 0.6;
-              trees.push([horizontal ? t : off, horizontal ? off : t, 0.75 + r() * 0.3, r()]);
-            }
-          }
-          continue;
-        }
-        const side = r() < 0.5 ? 1 : -1;
-        let t = a + r() * 3;
-        while (t < b) {
-          const roll = r();
-          const x = horizontal ? t : v + side * EDGE;
-          const z = horizontal ? v + side * EDGE : t;
-          const fy = horizontal ? (side > 0 ? Math.PI : 0) : (side > 0 ? -Math.PI / 2 : Math.PI / 2);
-          if (roll < 0.22) props.group({ x, z, ry: fy }, () => {
-            for (const bx of [-0.7, 0.7]) props.box(0.1, 0.45, 0.4, '#2e3440', { x: bx, y: ROAD_Y, sharp: true });
-            for (let q = 0; q < 3; q++) props.box(1.8, 0.07, 0.14, '#c98a4b', { y: ROAD_Y + 0.45, z: -0.14 + q * 0.14, r: 0.03 });
-            props.box(1.8, 0.35, 0.06, '#c98a4b', { y: ROAD_Y + 0.6, z: 0.2, r: 0.03 });
-          });
-          else if (roll < 0.36) props.group({ x, z, ry: fy }, () => {
-            props.cyl(0.22, 0.2, 0.75, '#3f8f45', { y: ROAD_Y }, 10);
-            props.cyl(0.24, 0.24, 0.08, '#2e3440', { y: ROAD_Y + 0.75 }, 10);
-          });
-          else if (roll < 0.48) props.group({ x, z, ry: fy }, () => {
-            props.box(2.2, 0.4, 0.7, '#b9ad98', { y: ROAD_Y, r: 0.12 });
-            props.box(2.0, 0.06, 0.55, '#5b3a1e', { y: ROAD_Y + 0.36, sharp: true });
-            for (let q = 0; q < 5; q++) props.blob(0.24, ['#ff6b9a', '#ffd43b', '#ffffff', '#b197fc', '#ff922b'][q], { x: -0.8 + q * 0.4, y: ROAD_Y + 0.5, z: (q % 2) * 0.15 - 0.07 }, 1);
-          });
-          else if (roll < 0.54) props.group({ x, z, ry: fy }, () => {
-            props.box(2.6, 0.1, 0.9, '#5f6875', { y: ROAD_Y + 2.3, r: 0.04 });
-            props.box(0.08, 2.3, 0.08, '#5f6875', { x: -1.2, y: ROAD_Y, z: 0.35, sharp: true });
-            props.box(0.08, 2.3, 0.08, '#5f6875', { x: 1.2, y: ROAD_Y, z: 0.35, sharp: true });
-            props.box(2.4, 1.6, 0.04, '#cfe6ef', { y: ROAD_Y + 0.5, z: 0.4, mat: 'glass', sharp: true });
-            props.box(1.6, 0.1, 0.3, '#c98a4b', { y: ROAD_Y + 0.45, z: 0.15, r: 0.03 });
-            props.box(0.6, 0.6, 0.06, '#f2c14e', { x: 1.0, y: ROAD_Y + 2.45, z: 0.4, mat: 'lit', sharp: true });
-          });
-          else if (roll < 0.7) props.group({ x: horizontal ? t : v + side * 1.25, z: horizontal ? v + side * 1.25 : t, y: 0.06 - ROAD_Y, ry }, () => {
-            const col = carColors[(r() * carColors.length) | 0];
-            props.rbox(3.4, 0.8, 1.6, 0.35, col, { y: ROAD_Y + 0.3, mat: 'soft' });
-            props.rbox(1.9, 0.72, 1.45, 0.32, '#bfe3ff', { x: -0.2, y: ROAD_Y + 0.95, mat: 'glass' });
-            for (const [cx, cz] of [[1.1, 0.75], [-1.1, 0.75], [1.1, -0.75], [-1.1, -0.75]]) props.cyl(0.36, 0.36, 0.26, '#22262d', { x: cx, y: ROAD_Y + 0.36, z: cz - Math.sign(cz) * 0.13, rx: Math.PI / 2 }, 10);
-          });
-          t += 4 + r() * 7;
-        }
-      }
-    }
-  });
-  group.add(props.build());
-  // street trees (instanced), each slightly different
-  const trunkGeo = new THREE.CylinderGeometry(0.14, 0.2, 2.2, 7).translate(0, 1.1, 0);
-  const crownGeo = mergeBlobs([[0, 3.0, 0, 1.25], [0.5, 2.6, 0.3, 0.8], [-0.45, 2.7, -0.3, 0.75]], 1);
-  const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshStandardMaterial({ color: '#7a5233', roughness: 1 }), trees.length);
-  const crowns = new THREE.InstancedMesh(crownGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 }), trees.length);
-  const d = new THREE.Object3D();
-  const greens = ['#4ca346', '#5cb84a', '#3f8f3a', '#7cbf3f', '#6aa84f'];
-  trees.forEach(([x, z, s, q], i) => {
-    d.position.set(x, ROAD_Y, z);
-    d.rotation.set(0, q * 6, 0);
-    d.scale.set(s, s * (0.9 + q * 0.3), s);
-    d.updateMatrix();
-    trunks.setMatrixAt(i, d.matrix);
-    crowns.setMatrixAt(i, d.matrix);
-    crowns.setColorAt(i, new THREE.Color(greens[Math.floor(q * greens.length)]));
-  });
-  for (const m of [trunks, crowns]) { m.castShadow = true; m.receiveShadow = true; m.computeBoundingSphere(); group.add(m); }
-  return group;
 }
 
 function mergeBlobs(list, detail = 2) {

@@ -13,15 +13,19 @@ import { Sound } from './audio.js';
 import { CrowdRenderer } from './crowd.js';
 import { Citizens } from './citizens.js';
 import { Traffic } from './traffic.js';
-import { PLAY_ROADS } from '../world/environment.js';
+import { PLOTS, HQ } from '../world/citymap.js';
+import { route, pathLength, homeNode, randomSidewalkPoint } from './walkgraph.js';
 import { icon } from '../ui/icons.js';
 
 const TIER = Object.fromEntries(WORKERS.map((w, i) => [w.id, { ...w, index: i }]));
 const WALK_Y = 0.23;
-const HQ_ROAD_Z = CELL / 2 - SIDEWALK; // HQ-side sidewalk of the street in front of the HQ
 const HQ_DEPOSIT_Z = 5.4;
+const HQ_RY = HQ.ry || 0;
+/** Local (x, z) of a frame at (cx, cz) rotated by ry → world. */
+const toWorldXZ = (cx, cz, ry, x, z) => ({ x: cx + x * Math.cos(ry) + z * Math.sin(ry), z: cz - x * Math.sin(ry) + z * Math.cos(ry) });
+const toLocalXZ = (cx, cz, ry, x, z) => { const dx = x - cx, dz = z - cz; return { x: dx * Math.cos(ry) - dz * Math.sin(ry), z: dx * Math.sin(ry) + dz * Math.cos(ry) }; };
+const hqPoint = (x, z) => toWorldXZ(HQ.x, HQ.z, HQ_RY, x, z);
 const LANE_Z = 5.6;        // local z of the walkway lane in front of a building
-const EDGE_X = PLAY_HALF + CELL / 2; // where commuters enter / leave the district
 const SPEED_OPEN = 3;      // game minutes per real second while the city works
 const SPEED_CLOSED = 30;   // nights & week-ends fly by
 const _v = new THREE.Vector3();
@@ -38,14 +42,20 @@ export const zoneOf = (i, j) => (Math.abs(i) === GRID || j === -GRID ? 'ZI' : 'Z
 
 // ===========================================================================
 class Plot {
-  constructor(game, i, j) {
+  /** spec: {id, x, z, ry, zone} from the map editor. */
+  constructor(game, spec, starter = false) {
     this.game = game;
+    // ring coordinates around the HQ (pricing, demolition time, decoration seeds)
+    const i = Math.round((spec.x - HQ.x) / CELL), j = Math.round((spec.z - HQ.z) / CELL);
     this.i = i; this.j = j;
-    this.key = `${i},${j}`;
-    this.zone = zoneOf(i, j);
-    this.center = new THREE.Vector3(i * CELL, 0, j * CELL);
+    this.key = spec.id;
+    this.zone = spec.zone === 'ZI' ? 'ZI' : 'ZM';
+    this.ry = spec.ry || 0;
+    this.starter = starter;
+    this.center = new THREE.Vector3(spec.x, 0, spec.z);
     this.group = new THREE.Group();
     this.group.position.copy(this.center);
+    this.group.rotation.y = this.ry;
     const industrial = this.zone === 'ZI';
 
     const b = new MeshBuilder();
@@ -104,7 +114,9 @@ class Plot {
     this.ruin = null;
     this.demolish = null;
     // Most lots start with an abandoned building; a few (and the starter lots) are vacant.
-    const vacant = STARTER_LOTS.includes(this.key) || ((i * 31 + j * 17 + 40) % 5 === 0);
+    let hash = 0;
+    for (const ch of this.key) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+    const vacant = starter || STARTER_LOTS.includes(this.key) || Math.abs(hash) % 5 === 0;
     if (!vacant) this.addRuin();
     this.setOccupied(false);
     game.scene.add(this.group);
@@ -263,6 +275,7 @@ class Building {
     this.workers = [];
     this.root = new THREE.Group();
     this.root.position.copy(plot.center).setY(PAD_Y);
+    this.root.rotation.y = plot.ry;
     game.scene.add(this.root);
     this.emitTimer = Math.random();
     this.anim = null;
@@ -334,52 +347,33 @@ class Building {
     if (animate) this.anim = { t: 0, dur: 0.9 };
   }
 
-  // --- positions (world space; buildings are never rotated) ---
-  local(x, z) { return { x: this.plot.center.x + x, z: this.plot.center.z + z }; }
-  lane(x) { return { x, z: this.plot.center.z + LANE_Z }; }
-  spotPos(slot) { return { x: this.plot.center.x + SPOT_X[slot], z: this.plot.center.z + 6.0 }; }
+  // --- positions (local frame of the lot: front = +z, rotated with the lot) ---
+  local(x, z) { return toWorldXZ(this.plot.center.x, this.plot.center.z, this.plot.ry, x, z); }
+  /** Point of the walkway in front of the building, level with point p. */
+  lane(p) { const l = toLocalXZ(this.plot.center.x, this.plot.center.z, this.plot.ry, p.x, p.z); return this.local(l.x, LANE_Z); }
+  spotPos(slot) { return this.local(SPOT_X[slot], 6.0); }
   doorOut() { const d = this.model.door; return this.local(d.out[0], d.out[1]); }
   doorIn() { const d = this.model.door; return this.local(d.in[0], d.in[1]); }
   station(name, slot) {
     const [x, z, yaw] = this.model.spots[name];
     const off = ((slot % 4) - 1.5) * 0.8;
     const p = this.local(x + Math.cos(yaw) * off, z - Math.sin(yaw) * off);
-    return { ...p, yaw };
+    return { ...p, yaw: yaw + this.plot.ry };
   }
-  /** Sidewalk (building side) of the street in front of this lot. */
-  roadZ() { return this.plot.center.z + CELL / 2 - SIDEWALK; }
+  /** Front gate of the lot, where walks to the street start. */
+  gate() { return this.local(0, 8.2); }
 
   computeRouteLength() {
-    const { i, j } = this.plot;
-    const cx = i * CELL, cz = j * CELL;
-    let len = CELL / 2 - 6;
-    if (j !== 0) {
-      const xr = i === 0 ? CELL / 2 : cx - Math.sign(i) * CELL / 2;
-      len += Math.abs(xr - cx) + Math.abs(cz + CELL / 2 - HQ_ROAD_Z) + Math.abs(xr);
-    } else {
-      len += Math.abs(cx);
-    }
-    return len + (HQ_ROAD_Z - HQ_DEPOSIT_Z);
+    const pts = this.makePath(0, true);
+    return pathLength(this.spotPos(0), pts);
   }
 
-  /** Spot → HQ deposit (toHQ) or HQ → spot (back). */
+  /** Spot → HQ deposit (toHQ) or HQ → spot (back), along the sidewalks of the street network. */
   makePath(slot, toHQ) {
-    const { i, j } = this.plot;
-    const cx = i * CELL, cz = j * CELL;
-    // walk on sidewalks: the one in front of the lot, then the cross street beside the
-    // lot's column (crossing at the corners), then the HQ-side sidewalk
-    const jx = (Math.random() - 0.5) * 0.7;
-    const jz = (Math.random() - 0.5) * 0.7;
     const spot = this.spotPos(slot);
-    const zr = cz + CELL / 2 - SIDEWALK + jz;
-    const pts = [{ x: spot.x, z: zr }];
-    if (j !== 0) {
-      const road = i === 0 ? CELL / 2 : cx - Math.sign(i) * CELL / 2;
-      const xr = road + (i > 0 ? SIDEWALK : -SIDEWALK) + jx;
-      pts.push({ x: xr, z: zr }, { x: xr, z: HQ_ROAD_Z + jz });
-    }
-    const hx = (Math.random() - 0.5) * 6.5;
-    pts.push({ x: hx, z: HQ_ROAD_Z + jz }, { x: hx, z: HQ_DEPOSIT_Z });
+    const dep = hqPoint((Math.random() - 0.5) * 6.5, HQ_DEPOSIT_Z);
+    const front = hqPoint(dep.x - HQ.x, 9.2);
+    const pts = [this.gate(), ...route(this.gate(), front), front, dep];
     if (toHQ) return pts;
     pts.reverse();
     pts.push(spot);
@@ -471,7 +465,8 @@ class Worker {
     this.taskIndex = 0;
     this.inside = false;
     this.paused = false;
-    this.side = building.plot.center.x === 0 ? (data.seed % 2 ? 1 : -1) : Math.sign(building.plot.center.x);
+    const b = building.plot.center;
+    this.home = homeNode(b.x, b.z, data.seed || 1);
     this.buildChar();
     this.setVisible(false);
   }
@@ -579,13 +574,13 @@ class Worker {
       if (!this.inside) {
         const p = this.char.root.position;
         const out = b.doorOut(), inn = b.doorIn();
-        pts.push(b.lane(p.x), b.lane(out.x), out, { ...inn, hide: true });
+        pts.push(b.lane(p), b.lane(out), out, { ...inn, hide: true });
       }
-      this.taskYaw = Math.PI;
+      this.taskYaw = Math.PI + b.plot.ry;
     } else {
       const from = this.exitPoints(pts);
       const st = b.station(task.at === 'in' ? Object.keys(b.model.spots)[0] : task.at, this.slot);
-      pts.push(b.lane(from.x), b.lane(st.x), st);
+      pts.push(b.lane(from), b.lane(st), st);
       this.taskYaw = st.yaw;
     }
     this.path = pts;
@@ -601,7 +596,7 @@ class Worker {
     const pts = [];
     const from = this.exitPoints(pts);
     const spot = b.spotPos(this.slot);
-    pts.push(b.lane(from.x), b.lane(spot.x), spot, ...b.makePath(this.slot, true));
+    pts.push(b.lane(from), b.lane(spot), spot, ...b.makePath(this.slot, true));
     this.path = pts;
     this.seg = 0;
     this.state = 'toHQ';
@@ -612,13 +607,12 @@ class Worker {
     const pts = [];
     if (fromHQ) {
       const p = this.char.root.position;
-      const z = HQ_ROAD_Z + (Math.random() - 0.5) * 0.7;
-      pts.push({ x: p.x, z }, { x: this.side * EDGE_X, z });
+      const front = hqPoint(p.x - HQ.x, 9.2);
+      pts.push(front, ...route(front, this.home));
     } else {
       const from = this.exitPoints(pts);
       const spot = b.spotPos(this.slot);
-      const zr = b.roadZ() + (Math.random() - 0.5) * 0.7;
-      pts.push(b.lane(from.x), b.lane(spot.x), spot, { x: spot.x, z: zr }, { x: this.side * EDGE_X, z: zr });
+      pts.push(b.lane(from), b.lane(spot), spot, b.gate(), ...route(b.gate(), this.home));
     }
     this.char.bag.visible = false;
     this.path = pts;
@@ -629,11 +623,10 @@ class Worker {
   commuteIn() {
     const b = this.building;
     const spot = b.spotPos(this.slot);
-    const zr = b.roadZ() + (Math.random() - 0.5) * 0.7;
-    this.setPos({ x: this.side * EDGE_X, z: zr });
+    this.setPos(this.home);
     this.setVisible(true);
     this.inside = false;
-    this.path = [{ x: spot.x, z: zr }, spot];
+    this.path = [...route(this.home, b.gate()), b.gate(), spot];
     this.seg = 0;
     this.state = 'commuteIn';
   }
@@ -686,7 +679,7 @@ class Worker {
       }
       case 'deposit': {
         this.timer += dt;
-        this.yaw = Math.PI;
+        this.yaw = Math.PI + HQ_RY;
         this.anim('cheer', t + this.phase, 0);
         if (this.timer > 0.65) {
           if (this.human && !onShift) this.goHome(true);
@@ -786,12 +779,13 @@ export class Game {
     this.cheapestCache = Infinity;
 
     this.createHQ();
-    for (let i = -GRID; i <= GRID; i++) {
-      for (let j = -GRID; j <= GRID; j++) {
-        if (i === 0 && j === 0) continue;
-        const p = new Plot(this, i, j);
-        this.plots.set(p.key, p);
-      }
+    // the two lots closest to the HQ start vacant and cheap
+    const byDist = [...PLOTS].sort((a, b) => Math.hypot(a.x - HQ.x, a.z - HQ.z) - Math.hypot(b.x - HQ.x, b.z - HQ.z));
+    const starters = new Set(byDist.slice(0, 2).map((p) => p.id));
+    for (const spec of PLOTS) {
+      if (this.plots.has(spec.id)) continue;
+      const p = new Plot(this, spec, starters.has(spec.id));
+      this.plots.set(p.key, p);
     }
     this.createFrames();
     this.createGolden();
@@ -1382,7 +1376,8 @@ export class Game {
   // ---------------- scene objects ----------------
   createHQ() {
     const { group, coin } = buildHQ();
-    group.position.set(0, PAD_Y, 0);
+    group.position.set(HQ.x, PAD_Y, HQ.z);
+    group.rotation.y = HQ_RY;
     this.hq = group;
     this.hqCoin = coin;
     this.hqBounce = 0;
@@ -1391,6 +1386,9 @@ export class Game {
     pad.box(PAD - 0.7, 0.04, PAD - 0.7, '#e8e1d2', { y: PAD_Y - 0.03 });
     for (let k = 0; k < 6; k++) pad.box(PAD - 0.7, 0.045, 0.06, '#cfc6b5', { y: PAD_Y - 0.03, z: 1 + k * 1.0 });
     const padMesh = pad.build({ castShadow: false });
+    padMesh.position.set(HQ.x, 0, HQ.z);
+    padMesh.rotation.y = HQ_RY;
+    this.hqPad = padMesh;
     this.scene.add(padMesh, group);
     const hit = new THREE.Mesh(new THREE.BoxGeometry(12, 14, 13).translate(0, 7, -0.5), new THREE.MeshBasicMaterial({ visible: false }));
     hit.userData = { type: 'hq' };
@@ -1448,10 +1446,8 @@ export class Game {
   }
 
   spawnGolden() {
-    const useX = Math.random() < 0.5;
-    const pos = useX
-      ? new THREE.Vector3(PLAY_ROADS[(Math.random() * PLAY_ROADS.length) | 0], 0.2, (Math.random() - 0.5) * PLAY_HALF * 1.6)
-      : new THREE.Vector3((Math.random() - 0.5) * PLAY_HALF * 1.6, 0.2, PLAY_ROADS[(Math.random() * PLAY_ROADS.length) | 0]);
+    const p = randomSidewalkPoint(HQ, 90) || hqPoint((Math.random() - 0.5) * 20, 12);
+    const pos = new THREE.Vector3(p.x, 0.2, p.z);
     this.golden = { life: 20, pos };
     this.goldenObj.root.position.copy(pos);
     this.goldenObj.root.visible = true;
@@ -1480,6 +1476,7 @@ export class Game {
     if (target) {
       const center = target.plot ? target.plot.center : target.center || new THREE.Vector3();
       this.selFrame.position.set(center.x, 0, center.z);
+      this.selFrame.rotation.y = target.plot ? target.plot.ry : target.ry || (target.hq ? HQ_RY : 0);
       this.selFrame.visible = true;
     } else {
       this.selFrame.visible = false;
@@ -1552,6 +1549,7 @@ export class Game {
       if (hit.type === 'plot') {
         const pl = hit.plot;
         this.hoverFrame.position.set(pl.center.x, 0, pl.center.z);
+        this.hoverFrame.rotation.y = pl.ry;
         this.hoverFrame.visible = this.selected !== pl && this.selected !== pl.building;
         tip = pl.building
           ? `${icon(pl.building.typeId)} ${pl.building.biz.name} · ${pl.building.open ? 'Niv. ' + pl.building.level : 'en construction'}`
@@ -1658,7 +1656,7 @@ export class Game {
 
   /** Called right before rendering, after the camera moved. */
   renderPrep() {
-    if (this.editor?.active) this.crowd.update(this.camera, this.workers, this.crew);
+    if (this.editor?.active) this.crowd.update(this.camera);
     else this.crowd.update(this.camera, this.workers, this.citizens.list, this.crew, this.traffic.cars);
   }
 
@@ -1667,14 +1665,11 @@ export class Game {
     for (const b of this.buildings.values()) if (b.model?.lod) setBuildingLodScale(b.model.lod, scale);
   }
 
+  /** Lots next to the HQ or to one of your businesses can be bought. */
   isFrontier(p) {
-    for (let di = -1; di <= 1; di++) {
-      for (let dj = -1; dj <= 1; dj++) {
-        const i = p.i + di, j = p.j + dj;
-        if (i === 0 && j === 0) return true;
-        if (this.buildings.has(`${i},${j}`)) return true;
-      }
-    }
+    const near = (x, z) => Math.hypot(p.center.x - x, p.center.z - z) <= 30.5;
+    if (near(HQ.x, HQ.z)) return true;
+    for (const b of this.buildings.values()) if (near(b.plot.center.x, b.plot.center.z)) return true;
     return false;
   }
 
@@ -1779,14 +1774,23 @@ export class Game {
       const p = this.plots.get(key);
       if (p && p.ruin) { p.startDemolition(); p.demolish.t = t; }
     }
+    let refunds = 0;
     for (const bd of data.buildings) {
       const plot = this.plots.get(bd.key);
-      if (!plot || !BIZ[bd.type]) continue;
+      if (!BIZ[bd.type]) continue;
+      if (!plot) {
+        // its lot was removed in the map editor: the business is sold
+        const v = sellValue(BIZ[bd.type], bd.level);
+        this.cash += v;
+        refunds += v;
+        continue;
+      }
       const b = new Building(this, plot, bd.type, bd.level, bd.construction || 0);
       this.buildings.set(plot.key, b);
       for (const wd of bd.workers) this.hire(b, wd.tier, true, wd);
     }
     this.placeWorkersForTime();
+    if (refunds) setTimeout(() => this.toast(`Commerces sur des terrains supprimés revendus : +${money(refunds)}`, 'contract', 'gold'), 1500);
     const rate = this.computeRate();
     this.cheapestCache = this.cheapestBuild();
     // Offline: humans only work ~30% of the week (LTr), robots ~100%; net of wages & taxes.
