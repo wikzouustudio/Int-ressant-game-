@@ -1,7 +1,7 @@
 import { rng } from '../models/builder.js';
 import { CELL, PLAY_HALF } from '../game/config.js';
 import {
-  WORLD_HALF, ZCELL, ZN, CORE_HALF, ZONES, SPECIALS, CATALOG_ITEM, isTreeKind, loadSpec, decodeZones, expandLine, linePts, curvePts,
+  WORLD_HALF, ZCELL, ZN, CORE_HALF, ZONES, SPECIALS, CATALOG_ITEM, HOUSE_LIST, isTreeKind, loadSpec, decodeZones, expandLine, linePts, curvePts,
 } from './mapspec.js';
 
 // City plan around the playable district. It comes from the map edited in the in-game
@@ -300,12 +300,14 @@ export const KINDS = {
   rowhouse: { size: () => [17, 12], setback: 1.2, garden: true },
   barn: { size: () => [14, 11], setback: 2 },
 };
+for (const [k, , w, d] of HOUSE_LIST) KINDS[k] = { size: () => [w, d], setback: 0.6, garden: k !== 'hBrickApt' && k !== 'hBlueApt' && k !== 'hTownPair' };
 const MIX = {
-  ped: [['oldtown', 6], ['cafe', 1.4]],
+  ped: [['oldtown', 5], ['cafe', 1.4], ['hTownPair', 1.6], ['hBlueApt', 1], ['hBrickApt', 0.8]],
   cbd: [['tower', 4], ['office', 3], ['plaza', 0.6]],
   shop: [['bigbox', 2], ['shoprow', 3], ['gas', 0.6]],
   ind: [['warehouse', 4], ['factory', 3], ['silo', 1.2], ['yard', 1.6]],
-  res: [['chalet', 4], ['villa', 2], ['rowhouse', 1.5], ['apartment', 1.2]],
+  res: [['chalet', 2], ['villa', 1.2], ['rowhouse', 0.6], ['apartment', 0.6], ['hColonial', 1.4], ['hCape', 1.4], ['hCraftsman', 1.4], ['hRanch', 1.1], ['hFarmhouse', 0.9],
+    ['hDuplex', 1], ['hModern', 1], ['hCabin', 0.9], ['hBrickApt', 0.7], ['hBlueApt', 0.5], ['hTownPair', 0.7], ['hBeach', 0.4]],
   farm: [['barn', 1]],
 };
 function pickKind(zone, r, opts) {

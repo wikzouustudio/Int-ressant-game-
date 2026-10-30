@@ -3,6 +3,7 @@ import { MeshBuilder, rng } from './builder.js';
 import { makeShadowProxy } from './buildings.js';
 import { PAL, shade, awning, pot, bench, cafeTable } from './kit.js';
 import { LOTS, FIELDS } from '../world/citymap.js';
+import { HOUSES } from './houses.js';
 
 // Building models for the districts around the playable city. Kept deliberately lean
 // (window bands instead of single windows on tall buildings) because there are a few
@@ -432,6 +433,8 @@ const MODELS = {
     bench(b, { x: 0, z: -d / 2 + 1, ry: 0 });
   },
 };
+
+Object.assign(MODELS, HOUSES);
 
 // ---------------- small objects for the map editor ----------------
 Object.assign(MODELS, {

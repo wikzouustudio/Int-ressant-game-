@@ -50,7 +50,14 @@ export const SPECIALS = {
 };
 
 /** Everything the 3D editor can place: kind → footprint (w × d m) and category. */
+export const HOUSE_LIST = [
+  ['hColonial', 'Maison coloniale', 13, 12], ['hCape', 'Maison à lucarnes', 10, 13], ['hCraftsman', 'Bungalow à porche', 11, 13],
+  ['hRanch', 'Plain-pied avec garage', 15, 11], ['hFarmhouse', 'Ferme blanche', 12, 13], ['hBeach', 'Maison sur pilotis', 11, 11],
+  ['hTownPair', 'Maisons de ville', 10, 11], ['hDuplex', 'Duplex', 13, 12], ['hBrickApt', 'Immeuble en briques', 11, 11],
+  ['hModern', 'Maison moderne', 11, 11], ['hCabin', 'Chalet en rondins', 12, 12], ['hBlueApt', 'Immeuble bleu', 10, 10],
+];
 export const CATALOG = [
+  { cat: 'Maisons', items: HOUSE_LIST },
   { cat: 'Bâtiments', items: [
     ['oldtown', 'Maison de vieille ville', 8, 10], ['cafe', 'Café-terrasse', 9, 9], ['shoprow', 'Boutiques', 18, 11],
     ['apartment', 'Immeuble', 19, 13], ['rowhouse', 'Maisons mitoyennes', 17, 12], ['chalet', 'Chalet', 12, 14],
