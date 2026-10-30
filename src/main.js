@@ -7,6 +7,7 @@ import { Game } from './game/game.js';
 import { UI } from './ui/ui.js';
 import { icon } from './ui/icons.js';
 import * as CFG from './game/config.js';
+import { MapEditor } from './editor/editor.js';
 
 document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
 
@@ -46,6 +47,11 @@ async function boot() {
   quality.start();
 
   const ui = new UI(game, engine);
+  const editor = new MapEditor();
+  editor.onApply = () => { game.save(); game.resetting = true; location.reload(); };
+  ui.editor = editor;
+  window.__ed = editor;
+  document.getElementById('btn-map').onclick = () => { game.sound.click(); game.select(null); editor.show(); };
   ui.quality = quality;
   await step(85);
   const result = game.load();

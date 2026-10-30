@@ -5,7 +5,7 @@ import { setNightLevel } from '../models/materials.js';
 import { CELL, GRID, ROAD_Y, PLAY_HALF, ROAD_W, CARRIAGE, isMainRoad } from '../game/config.js';
 import { buildDistricts } from '../models/districts.js';
 import { buildRoadNetwork, buildTrain } from './roadmesh.js';
-import { TREES, WATER, R_WORLD, R_RAIL } from './citymap.js';
+import { TREES, WORLD_HALF, isWater, CORE_EXITS } from './citymap.js';
 
 const LAMP_RY = -Math.PI / 4;
 // Street grid of the playable district (x = const and z = const lines, boundary roads
@@ -17,8 +17,7 @@ export const ROADS_Z = ROADS;
 /** Road lines that lie inside the playable district (golden briefcases, events). */
 export const PLAY_ROADS = ROADS.filter((v) => Math.abs(v) <= PLAY_HALF + 0.1);
 /** Avenues that continue out of the district: [line, side] → true (side = ±1 towards the outside). */
-const EXITS = new Set(['x|10|1', 'x|-10|1', 'z|10|1', 'z|-10|1', 'z|10|-1', 'z|-10|-1']);
-const continues = (axis, v, side) => EXITS.has(`${axis}|${v}|${side}`);
+const continues = (axis, v, side) => CORE_EXITS.has(`${axis}|${v}|${side}`);
 
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -29,12 +28,14 @@ const groundNoise = (x, z) => Math.sin(x * 0.05) * Math.cos(z * 0.06) + Math.sin
 
 export function heightAt(x, z) {
   const n = groundNoise(x, z);
-  const dCity = Math.max(Math.hypot(x, z) - R_WORLD, 0);
+  const dCity = Math.max(Math.abs(x) - WORLD_HALF, Math.abs(z) - WORLD_HALF, 0);
   let h = 0;
   if (dCity > 0) h = smooth(0, 60, dCity) * (2.5 + n * 2.5) + smooth(60, 300, dCity) * 25 * (0.6 + 0.4 * Math.sin(x * 0.01 + z * 0.012));
-  for (const w of WATER) {
-    const d = Math.hypot((x - w.x) / (w.rx + 4), (z - w.z) / (w.rz + 4));
-    if (d < 1) h = Math.min(h, -0.7 * (1 - d * d));
+  if (dCity === 0) {
+    // lakes: the ground dips under painted water cells (soft banks)
+    let w = 0;
+    for (const [dx, dz] of [[0, 0], [5, 0], [-5, 0], [0, 5], [0, -5]]) if (isWater(x + dx, z + dz)) w++;
+    if (w) h = Math.min(h, -0.9 * (w / 5));
   }
   return h;
 }
@@ -203,7 +204,7 @@ export function createEnvironment(engine) {
   const street = buildStreetscape();
   root.add(street);
   const train = buildTrain();
-  root.add(train);
+  root.add(train.group);
 
   // ---------------- Street lamps (instanced) ----------------
   const lampPos = [];
@@ -370,8 +371,8 @@ export function createEnvironment(engine) {
   // rocks scattered in the countryside
   const deco = new MeshBuilder();
   for (let i = 0; i < 70; i++) {
-    const a = r() * Math.PI * 2, d = R_WORLD + 10 + r() * 140;
-    const x = Math.cos(a) * d, z = Math.sin(a) * d;
+    const side = (r() * 4) | 0, t = (r() * 2 - 1) * (WORLD_HALF + 120), d = WORLD_HALF + 10 + r() * 120;
+    const x = side < 2 ? (side ? d : -d) : t, z = side < 2 ? t : (side === 2 ? d : -d);
     deco.blob(0.6 + r() * 1.4, ['#8d939b', '#a3a9b0', '#7b8189'][i % 3], { x, y: heightAt(x, z) + 0.2, z, sy: 0.6, ry: r() * 3 }, 1);
   }
   root.add(deco.build());
@@ -505,7 +506,7 @@ export function createEnvironment(engine) {
       cl.position.x += cl.userData.speed * dt;
       if (cl.position.x > 340) cl.position.x = -340;
     }
-    train.rotation.y = -time * (13 / R_RAIL);
+    train.update(time);
     if (view && frame % 10 === 0) districts.update(view.camera, cityNear);
   }
 

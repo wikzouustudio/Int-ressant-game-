@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MeshBuilder, rng } from '../models/builder.js';
-import { ROADS_NET, PATHS, ALLEYS, WATER, R_RAIL, zoneAt, getRoadGraph, CORE_LINES } from './citymap.js';
+import { ROADS_NET, PATHS, RAILS, WATER_CELLS, zoneAt, CORE_LINES, isWater } from './citymap.js';
+import { ZCELL } from './mapspec.js';
 import { PLAY_HALF, ROAD_Y } from '../game/config.js';
 
 // Geometry for the district road network: curved carriageways, raised sidewalks with
@@ -167,22 +168,6 @@ export function buildRoadNetwork(renderer, paveTex) {
     }
   }
 
-  // turning circles at the dead ends of district streets
-  const g = getRoadGraph();
-  const tb = new MeshBuilder({ lod: 1 });
-  for (const node of g.nodes) {
-    if (node.edges.length !== 1 || inCore(node.x, node.z)) continue;
-    const e = node.edges[0];
-    if (e.line.type !== 'sec') continue;
-    tb.cyl(6.4, 6.4, ROAD_Y, '#c9c3b8', { x: node.x, z: node.z }, 28);
-    tb.cyl(6.1, 6.1, ROAD_Y + 0.004, '#8f8473', { x: node.x, z: node.z }, 28);
-    tb.cyl(4.6, 4.6, ROAD_Y + 0.008, '#61666e', { x: node.x, z: node.z }, 28);
-    tb.cyl(1.8, 1.8, 0.5, '#7cbc4f', { x: node.x, z: node.z }, 16);
-    tb.blob(1.2, '#4ca346', { x: node.x, y: 1.0, z: node.z }, 1);
-  }
-  const turning = tb.build({ castShadow: false });
-  group.add(turning);
-
   // footpaths (gravel in parks, paved promenades between avenue lanes)
   for (const p of PATHS) {
     const pts = p.pts, F = frames(pts, p.closed), h = p.w / 2;
@@ -191,52 +176,53 @@ export function buildRoadNetwork(renderer, paveTex) {
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % pts.length;
       const mx = (pts[i][0] + pts[j][0]) / 2, mz = (pts[i][1] + pts[j][1]) / 2;
-      if (onOtherRoad(mx, mz, -1, 0.2) || zoneAt(mx, mz) === 'ped' || inCore(mx, mz)) continue;
+      if (onOtherRoad(mx, mz, -1, 0.2) || inCore(mx, mz)) continue;
+      if (zoneAt(mx, mz) === 'ped') {
+        // the old town is paved already: only lamps along its alleys
+        if (i % 6 === 2) lamps.push([mx + F[i][2] * 2.2, mz + F[i][3] * 2.2, Math.atan2(-F[i][3], F[i][2])]);
+        continue;
+      }
       const a = pts[i], b = pts[j], fa = F[i], fb = F[j];
       geo.quad([a[0] - fa[2] * h, 0.04, a[1] - fa[3] * h], [a[0] + fa[2] * h, 0.04, a[1] + fa[3] * h],
         [b[0] + fb[2] * h, 0.04, b[1] + fb[3] * h], [b[0] - fb[2] * h, 0.04, b[1] - fb[3] * h], up);
-      if (p.linear && i % 6 === 0) lamps.push([mx + F[i][2] * (h + 0.6), mz + F[i][3] * (h + 0.6), Math.atan2(-F[i][3], F[i][2])]);
-      else if (!p.linear && i % 9 === 0) lamps.push([mx + F[i][2] * (h + 0.5), mz + F[i][3] * (h + 0.5), Math.atan2(-F[i][3], F[i][2])]);
-    }
-  }
-  // old-town alleys get lamps too (the ground there is paved already)
-  for (const pts of ALLEYS) {
-    const F = frames(pts, false);
-    for (let i = 2; i < pts.length - 1; i += 6) {
-      const [x, z] = pts[i];
-      if (zoneAt(x, z) !== 'ped') continue;
-      lamps.push([x + F[i][2] * 2.2, z + F[i][3] * 2.2, Math.atan2(-F[i][3], F[i][2])]);
+      if (i % 7 === 0) lamps.push([mx + F[i][2] * (h + 0.5), mz + F[i][3] * (h + 0.5), Math.atan2(-F[i][3], F[i][2])]);
     }
   }
 
-  // ---------------- railway ring ----------------
+  // ---------------- railways ----------------
   const rail = new Geo(), ballast = new Geo();
-  const RN = 720;
-  for (let i = 0; i < RN; i++) {
-    const a0 = (i / RN) * Math.PI * 2, a1 = ((i + 1) / RN) * Math.PI * 2;
-    const ca0 = Math.cos(a0), sa0 = Math.sin(a0), ca1 = Math.cos(a1), sa1 = Math.sin(a1);
-    const at = (a, R, y) => [Math.cos(a) * R, y, Math.sin(a) * R];
-    const mx = ((ca0 + ca1) / 2) * R_RAIL, mz = ((sa0 + sa1) / 2) * R_RAIL;
-    const crossing = onOtherRoad(mx, mz, -1, 1.2);
-    const u0 = (i / RN) * 2 * Math.PI * R_RAIL / 2.4, u1 = ((i + 1) / RN) * 2 * Math.PI * R_RAIL / 2.4;
-    if (!crossing) {
-      ballast.quad(at(a0, R_RAIL - 1.9, 0.14), at(a0, R_RAIL + 1.9, 0.14), at(a1, R_RAIL + 1.9, 0.14), at(a1, R_RAIL - 1.9, 0.14), up, [[u0, 0], [u0, 1], [u1, 1], [u1, 0]]);
-      for (const R of [R_RAIL - 1.9, R_RAIL + 1.9]) {
-        const s = R > R_RAIL ? 1 : -1;
-        ballast.quad(at(a0, R + s * 0.5, 0), at(a0, R, 0.14), at(a1, R, 0.14), at(a1, R + s * 0.5, 0), [ca0 * s * 0.3, 1, sa0 * s * 0.3], [[u0, 0.02], [u0, 0.02], [u1, 0.02], [u1, 0.02]]);
+  for (const rl of RAILS) {
+    const pts = rl.pts, F = frames(pts, rl.closed);
+    const n = rl.closed ? pts.length : pts.length - 1;
+    let u = 0;
+    const P = (i, off, y) => { const p = pts[i % pts.length], f = F[i % pts.length]; return [p[0] + f[2] * off, y, p[1] + f[3] * off]; };
+    for (let i = 0; i < n; i++) {
+      const j = i + 1, q = pts[j % pts.length];
+      const len = Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1]);
+      const mx = (pts[i][0] + q[0]) / 2, mz = (pts[i][1] + q[1]) / 2;
+      const crossing = onOtherRoad(mx, mz, -1, 1.2);
+      const u0 = u / 2.4, u1 = (u + len) / 2.4;
+      u += len;
+      const f = F[i];
+      if (!crossing) {
+        ballast.quad(P(i, -1.9, 0.14), P(i, 1.9, 0.14), P(j, 1.9, 0.14), P(j, -1.9, 0.14), up, [[u0, 0], [u0, 1], [u1, 1], [u1, 0]]);
+        for (const sd of [-1, 1]) {
+          ballast.quad(P(i, sd * 2.4, 0), P(i, sd * 1.9, 0.14), P(j, sd * 1.9, 0.14), P(j, sd * 2.4, 0), [f[2] * sd * 0.3, 1, f[3] * sd * 0.3], [[u0, 0.02], [u0, 0.02], [u1, 0.02], [u1, 0.02]]);
+        }
       }
-    }
-    for (const R of [R_RAIL - 0.72, R_RAIL + 0.72]) {
-      rail.quad(at(a0, R - 0.06, 0.3), at(a0, R + 0.06, 0.3), at(a1, R + 0.06, 0.3), at(a1, R - 0.06, 0.3), up);
-      rail.quad(at(a0, R + 0.06, 0.3), at(a0, R + 0.06, crossing ? 0.06 : 0.14), at(a1, R + 0.06, crossing ? 0.06 : 0.14), at(a1, R + 0.06, 0.3), [ca0, 0, sa0]);
-      rail.quad(at(a0, R - 0.06, crossing ? 0.06 : 0.14), at(a0, R - 0.06, 0.3), at(a1, R - 0.06, 0.3), at(a1, R - 0.06, crossing ? 0.06 : 0.14), [-ca0, 0, -sa0]);
+      const yb = crossing ? 0.06 : 0.14;
+      for (const o of [-0.72, 0.72]) {
+        rail.quad(P(i, o - 0.06, 0.3), P(i, o + 0.06, 0.3), P(j, o + 0.06, 0.3), P(j, o - 0.06, 0.3), up);
+        rail.quad(P(i, o + 0.06, 0.3), P(i, o + 0.06, yb), P(j, o + 0.06, yb), P(j, o + 0.06, 0.3), [f[2], 0, f[3]]);
+        rail.quad(P(i, o - 0.06, yb), P(i, o - 0.06, 0.3), P(j, o - 0.06, 0.3), P(j, o - 0.06, yb), [-f[2], 0, -f[3]]);
+      }
     }
   }
 
   // ---------------- paved old town ----------------
   const town = new Geo();
   const S = 1.5;
-  for (let x = -160; x < 160; x += S) for (let z = -160; z < -PLAY_HALF; z += S) {
+  for (let x = -340; x < 340; x += S) for (let z = -340; z < 340; z += S) {
     if (zoneAt(x + S / 2, z + S / 2) !== 'ped' || onOtherRoad(x + S / 2, z + S / 2, -1, 0.5)) continue;
     town.quad([x, 0.03, z], [x + S, 0.03, z], [x + S, 0.03, z + S], [x, 0.03, z + S], up, [[x / 3, z / 3], [(x + S) / 3, z / 3], [(x + S) / 3, (z + S) / 3], [x / 3, (z + S) / 3]]);
   }
@@ -245,21 +231,24 @@ export function buildRoadNetwork(renderer, paveTex) {
   const waterMat = new THREE.MeshStandardMaterial({ color: '#2f9fc7', roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.9 });
   const rim = new MeshBuilder({ lod: 1 });
   const rr = rng(31);
-  for (const w of WATER) {
-    const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), waterMat);
-    water.scale.set(w.rx, 1, w.rz);
-    water.position.set(w.x, 0.05, w.z);
-    water.receiveShadow = true;
-    group.add(water);
-    const n = Math.round((w.rx + w.rz) * 1.6);
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
-      rim.blob(0.55 + rr() * 0.5, '#b0aaa0', { x: w.x + Math.cos(a) * (w.rx + 0.3), y: 0, z: w.z + Math.sin(a) * (w.rz + 0.3), sy: 0.5 }, 1);
-      if (i % 4 === 0) rim.cyl(0.05, 0.05, 1.6, '#5a8f3a', { x: w.x + Math.cos(a) * (w.rx - 1.5), y: -0.3, z: w.z + Math.sin(a) * (w.rz - 1.2) }, 4);
+  // water surface: one quad per painted 10 m cell; stones and reeds along the shore
+  const wg = new Geo();
+  for (const [x0, z0] of WATER_CELLS) {
+    wg.quad([x0, 0.05, z0], [x0 + ZCELL, 0.05, z0], [x0 + ZCELL, 0.05, z0 + ZCELL], [x0, 0.05, z0 + ZCELL], up);
+    const h = ZCELL / 2;
+    for (const [dx, dz, ex, ez] of [[-1, 0, 0, 1], [1, 0, 0, 1], [0, -1, 1, 0], [0, 1, 1, 0]]) {
+      if (isWater(x0 + h + dx * (h + 1), z0 + h + dz * (h + 1))) continue;
+      const ex0 = x0 + h + dx * (h + 0.2), ez0 = z0 + h + dz * (h + 0.2);
+      for (let t = -h; t < h; t += 2.5) {
+        rim.blob(0.55 + rr() * 0.45, '#b0aaa0', { x: ex0 + ex * t, y: 0, z: ez0 + ez * t, sy: 0.5 }, 1);
+        if (rr() < 0.25) rim.cyl(0.05, 0.05, 1.6, '#5a8f3a', { x: ex0 + ex * t - dx * 1.4, y: -0.3, z: ez0 + ez * t - dz * 1.4 }, 4);
+      }
     }
-    // wooden jetty
-    rim.box(2.6, 0.2, 9, '#9c6b3f', { x: w.x + w.rx - 3, y: 0.3, z: w.z, ry: Math.PI / 2 });
-    for (let i = 0; i < 4; i++) rim.cyl(0.15, 0.15, 1.2, '#6f4627', { x: w.x + w.rx - i * 2.4, y: -0.6, z: w.z - 1.2 }, 6);
+  }
+  if (WATER_CELLS.length) {
+    const water = wg.mesh(waterMat);
+    water.renderOrder = 1;
+    group.add(water);
   }
   group.add(rim.build());
 
@@ -279,33 +268,68 @@ export function buildRoadNetwork(renderer, paveTex) {
   return { group, lamps };
 }
 
-/** Freight / passenger train running on the circular railway (one rotating group). */
+/** Passenger train shuttling along the first railway line (loops when the line is closed). */
 export function buildTrain() {
-  const b = new MeshBuilder({ lod: 1 });
-  const cars = 7, len = 13;
-  for (let k = 0; k < cars; k++) {
-    const a = -(k * (len + 0.8)) / R_RAIL;
-    const loco = k === 0;
-    b.group({ x: Math.cos(a) * R_RAIL, z: Math.sin(a) * R_RAIL, ry: -a }, () => {
-      // local +z = direction of travel (counter-clockwise), x = radial
-      const body = loco ? '#e0573f' : k % 3 === 0 ? '#f1f3f5' : '#e0573f';
-      b.box(2.9, 0.6, len, '#2e3440', { y: 0.4, r: 0.1 });
-      b.rbox(3.1, 3.4, len - 0.4, 0.5, body, { y: 0.9, mat: 'soft' });
-      b.box(3.14, 0.9, len - 1.6, '#3e5874', { y: 2.3, mat: 'lit', sharp: true });
-      b.box(3.16, 0.25, len - 0.6, '#f8f9fa', { y: 1.6, sharp: true });
-      b.rbox(2.9, 0.4, len - 1, 0.18, '#9aa4b1', { y: 4.3 });
-      if (loco) {
-        b.rbox(3.0, 1.6, 1.4, 0.5, '#2e3440', { y: 2.4, z: len / 2 - 0.4, mat: 'glass' });
-        b.box(0.1, 1.4, 1.6, '#2e3440', { y: 4.6, x: 0.3, z: 1, sharp: true });
-        b.box(1.6, 0.08, 0.1, '#2e3440', { y: 6.0, x: 0.3, z: 1, sharp: true });
-        b.sphere(0.2, '#fff6d6', { x: -0.9, y: 1.3, z: len / 2 - 0.15, mat: 'neon' }, 8, 6);
-        b.sphere(0.2, '#fff6d6', { x: 0.9, y: 1.3, z: len / 2 - 0.15, mat: 'neon' }, 8, 6);
+  const line = RAILS.slice().sort((a, b) => b.pts.length - a.pts.length)[0];
+  const group = new THREE.Group();
+  if (!line || line.pts.length < 2) return { group, update() {} };
+  const pts = line.closed ? [...line.pts, line.pts[0]] : line.pts;
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = cum[cum.length - 1];
+  const cars = 6, len = 13, gap = 0.8;
+  const make = (loco, k) => {
+    const b = new MeshBuilder({ lod: 1 });
+    const body = loco ? '#e0573f' : k % 3 === 0 ? '#f1f3f5' : '#e0573f';
+    b.box(2.9, 0.6, len, '#2e3440', { y: 0.4, r: 0.1 });
+    b.rbox(3.1, 3.4, len - 0.4, 0.5, body, { y: 0.9, mat: 'soft' });
+    b.box(3.14, 0.9, len - 1.6, '#3e5874', { y: 2.3, mat: 'lit', sharp: true });
+    b.box(3.16, 0.25, len - 0.6, '#f8f9fa', { y: 1.6, sharp: true });
+    b.rbox(2.9, 0.4, len - 1, 0.18, '#9aa4b1', { y: 4.3 });
+    if (loco) {
+      for (const z of [len / 2 - 0.4, -len / 2 + 0.4]) b.rbox(3.0, 1.6, 1.4, 0.5, '#2e3440', { y: 2.4, z, mat: 'glass' });
+      b.box(0.1, 1.4, 1.6, '#2e3440', { y: 4.6, x: 0.3, z: 1, sharp: true });
+      b.box(1.6, 0.08, 0.1, '#2e3440', { y: 6.0, x: 0.3, z: 1, sharp: true });
+      for (const z of [len / 2 - 0.15, -len / 2 + 0.15]) for (const x of [-0.9, 0.9]) b.sphere(0.2, '#fff6d6', { x, y: 1.3, z, mat: 'neon' }, 8, 6);
+    }
+    const g = b.build();
+    g.traverse((m) => { if (m.isMesh) m.castShadow = true; });
+    return g;
+  };
+  const carObjs = [];
+  for (let k = 0; k < cars; k++) { const g = make(k === 0 || k === cars - 1, k); group.add(g); carObjs.push(g); }
+  const at = (d, out) => {
+    d = line.closed ? ((d % total) + total) % total : Math.max(0, Math.min(total, d));
+    let k = 1;
+    while (k < cum.length - 1 && cum[k] < d) k++;
+    const t = (d - cum[k - 1]) / (cum[k] - cum[k - 1] || 1);
+    out[0] = pts[k - 1][0] + (pts[k][0] - pts[k - 1][0]) * t;
+    out[1] = pts[k - 1][1] + (pts[k][1] - pts[k - 1][1]) * t;
+    return out;
+  };
+  const a = [0, 0], c = [0, 0];
+  const trainLen = cars * (len + gap);
+  const speed = 13;
+  return {
+    group,
+    update(time) {
+      // closed line: loop; open line: shuttle back and forth with a pause at each end
+      let head, dir = 1;
+      if (line.closed) head = time * speed;
+      else {
+        const run = Math.max(1, total - trainLen), period = (run / speed + 8) * 2, ph = time % period, half = period / 2;
+        const tt = ph < half ? ph : ph - half;
+        const d = Math.min(run, Math.max(0, (tt - 4) * speed));
+        if (ph < half) head = trainLen + d; else { head = total - trainLen - d; dir = -1; }
       }
-    });
-  }
-  const g = b.build();
-  g.traverse((m) => { if (m.isMesh) m.frustumCulled = false; });
-  return g;
+      carObjs.forEach((g, k) => {
+        const mid = head - dir * (k * (len + gap) + len / 2);
+        at(mid + len / 2 - 0.5, a); at(mid - len / 2 + 0.5, c);
+        g.position.set((a[0] + c[0]) / 2, 0, (a[1] + c[1]) / 2);
+        g.rotation.y = Math.atan2(a[0] - c[0], a[1] - c[1]);
+      });
+    },
+  };
 }
 
 function makeSleeperTexture(renderer) {

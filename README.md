@@ -27,14 +27,19 @@ Version optimisée : `npm run build` (site statique dans `dist/`), puis `npm run
 6. Suis les **Objectifs** (31 étapes avec primes) et, quand ton chiffre d'affaires est assez élevé,
    **entre en bourse (SIX)** : tu revends tout contre des actions qui donnent +5 % de revenus chacune, pour toujours.
 
-## La ville
+## La ville et l'éditeur de carte
 
-Le centre constructible (7×7 parcelles) est entouré d'une vraie ville organisée comme dans un city-builder :
-boulevard circulaire, autoroute de contournement, avenues radiales, voie ferrée avec un train,
-et des quartiers distincts — **vieille ville piétonne** (fontaine, église), **quartier des affaires**,
-**zone commerciale** (centre commercial, parkings), **zone industrielle** (usines, silos, conteneurs, centrale),
-**quartier résidentiel** (chalets, villas avec piscine, culs-de-sac) — séparés par des **zones sans routes** :
-parc avec lac, forêt, terres agricoles avec ferme, stade. Voitures et promeneurs circulent sur tout le réseau.
+Le centre constructible (7×7 parcelles) est entouré d'une ville carrée : boulevard, autoroute de
+contournement, avenues, voie ferrée avec un train, et des quartiers (vieille ville piétonne, affaires,
+commerces, industrie, habitations) séparés par des zones sans routes (parcs, lacs, forêt, champs).
+
+Le bouton **carte** en haut à droite ouvre l'**éditeur de carte** (vue de dessus) :
+- **Zones** : peins piéton, affaires, commerces, industrie, habitations, parc, forêt, agricole ou eau (grille de 10 m).
+- **Routes** : avenue, rue, autoroute, chemin piéton, voie ferrée — tracés droits ou courbes, aimantés aux routes existantes.
+- **Monuments** : église, gare, centre commercial, parking, stade, centrale, ferme, place de jeux, fontaine.
+- **Gomme**, annuler, export / import JSON, carte par défaut.
+- **Appliquer** reconstruit la ville en 3D : les bâtiments poussent le long des routes selon la zone peinte,
+  les voitures et les promeneurs suivent ton réseau. Ta partie (commerces, argent) est conservée.
 
 ## Le droit suisse dans le jeu
 
