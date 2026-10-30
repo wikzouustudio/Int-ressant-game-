@@ -1,5 +1,5 @@
 import {
-  BUSINESSES, BIZ, WORKERS, UPGRADES, MAX_LEVEL, LAW, CANTONS, CANTON, ZONES, ROBOT_UPKEEP, DAYS, DAYS_LONG,
+  BUSINESSES, BIZ, WORKERS, UPGRADES, MAX_LEVEL, LAW, CANTONS, CANTON, ZONES, DAYS, DAYS_LONG, GOALS, SHARE_BONUS, goalReward, MAX_PER_TYPE, sellValue,
   levelMult, slotsFor, money, fmt, pct, buildTime, demolishTime,
 } from '../game/config.js';
 import { icon } from './icons.js';
@@ -46,6 +46,9 @@ export class UI {
       this.onModalClick(e);
     });
     $('btn-research').onclick = () => { game.sound.click(); this.openResearch(); };
+    $('btn-goals').onclick = () => { game.sound.click(); this.openGoals(); };
+    $('btn-ipo').onclick = () => { game.sound.click(); this.openIPO(); };
+    game.on('goal', () => { if (this.modalKind === 'goals') this.openGoals(); });
     $('btn-fidu').onclick = () => { game.sound.click(); $('fidu-dot').classList.add('hidden'); this.openFiduciary(); };
     $('btn-law').onclick = () => { game.sound.click(); this.openLaw(); };
     $('btn-stats').onclick = () => { game.sound.click(); this.openStats(); };
@@ -165,10 +168,12 @@ export class UI {
       const unlocked = g.isUnlocked(biz);
       const allowed = biz.zones.includes(plot.zone);
       const price = g.buildPrice(b.id) + g.permitFee(b.id);
-      if (!unlocked || !allowed) {
+      const capped = g.countType(b.id) >= MAX_PER_TYPE;
+      if (!unlocked || !allowed || capped) {
         const why = !allowed
           ? `Interdit en ${zone.name.toLowerCase()} (LAT) — ${biz.zones.map((z) => ZONES[z].short).join(' / ')}`
-          : `Construis d'abord : ${BUSINESSES[biz.index - 1].name}`;
+          : capped ? `Maximum ${MAX_PER_TYPE} atteint — la COMCO bloque (loi sur les cartels)`
+            : `Construis d'abord : ${BUSINESSES[biz.index - 1].name}`;
         return `<button class="biz locked" disabled>
           <div class="icon" style="background:#334155">${icon(allowed ? 'lock' : 'warning')}</div>
           <div class="info"><b>${b.name}</b><small>${why}</small></div>
@@ -250,7 +255,7 @@ export class UI {
       const fireTitle = w.human
         ? `Résilier le contrat — ${w.data.days < LAW.trialDays ? 'période d\'essai : délai de 7 jours (CO 335b)' : 'délai de congé d\'un mois (CO 335c)'} : ${money(sev)}`
         : 'Revendre le robot';
-      const wage = w.human ? `${money(g.wage(w))}/h` : `entretien ${pct(ROBOT_UPKEEP, 0)} du CA`;
+      const wage = w.human ? `${money(g.wage(w))}/h` : `entretien ${pct(g.upkeepRate, 0)} du CA`;
       return `<div class="worker">
         <div class="avatar" style="background:${w.tier.color}2e">${icon(w.tier.icon)}</div>
         <div class="info"><b>${w.data.name}<span class="tier-tag" style="background:${w.tier.color}">${w.tier.short}</span></b>
@@ -271,7 +276,7 @@ export class UI {
         return `<button class="hire locked" disabled><div class="t">${icon('lock')}${t.short}</div><div class="d">Niveau ${t.unlock} requis</div><div class="p">—</div></button>`;
       }
       const fake = { human: t.human, data: { tier: t.id }, tier: t, building: b };
-      const wage = t.human ? `${money(g.wage(fake))}/h + ${pct(g.employerCostRate(fake) - 1, 1)} charges` : `24h/24 · entretien ${pct(ROBOT_UPKEEP, 0)}`;
+      const wage = t.human ? `${money(g.wage(fake))}/h + ${pct(g.employerCostRate(fake) - 1, 1)} charges` : `24h/24 · entretien ${pct(g.upkeepRate, 0)}`;
       return `<button class="hire ${full ? 'locked' : ''}" ${full ? 'disabled' : ''} data-action="hire" data-tier="${t.id}" data-cost="${price}">
         <div class="t">${icon(t.icon)}${t.short}</div>
         <div class="d">x${t.mult} productivité · ${wage}</div>
@@ -285,7 +290,7 @@ export class UI {
       const price = g.upgradePrice(b);
       const nextSlots = slotsFor(b.level + 1);
       const unlockTier = WORKERS.find((t) => t.unlock === b.level + 1);
-      const perks = ['revenus x1.6'];
+      const perks = [`revenus x${(levelMult(b.level + 1) / levelMult(b.level)).toFixed(1)}`];
       if (nextSlots > slots) perks.push('+1 poste');
       if (unlockTier) perks.push(`débloque ${unlockTier.short}`);
       up = `<button class="btn gold" data-action="upgrade" data-cost="${price}"><span class="l">${icon('up')}<span>Agrandir → Niv. ${b.level + 1}<small>${perks.join(' · ')}</small></span></span><span class="price">${money(price)}</span></button>`;
@@ -317,6 +322,7 @@ export class UI {
           <div><span>${icon('shield', 'inline')} Prime LAA (accidents prof.)</span><b>${pct(biz.laa, 1)}</b></div>
           <div><span>${icon('pin', 'inline')} Zone (LAT)</span><b>${ZONES[b.plot.zone].name}</b></div>
         </div>
+        <button class="btn red" data-action="sell"><span class="l">${icon('contract')}<span>Revendre le commerce<small>Le terrain reste à toi · contrats transférés (CO 333)</small></span></span><span class="price">+${money(sellValue(biz, b.level))}</span></button>
       </div>`;
   }
 
@@ -334,6 +340,9 @@ export class UI {
       if (b) this.open(b);
     } else if (a === 'hire') g.hire(t, btn.dataset.tier);
     else if (a === 'upgrade') g.upgrade(t);
+    else if (a === 'sell') {
+      if (confirm(`Revendre ${t.biz.name} (niveau ${t.level}) pour ${money(sellValue(t.biz, t.level))} ?\n\nLe terrain reste à toi. Les employés suivent le repreneur (art. 333 CO).`)) g.sellBuilding(t);
+    }
     else if (a === 'promote') g.promote(t.workers[+btn.dataset.idx]);
     else if (a === 'fire') {
       const w = t.workers[+btn.dataset.idx];
@@ -378,6 +387,56 @@ export class UI {
         <div class="p">${owned ? icon('check', 'inline') + ' Acquis' : money(u.cost)}</div></button>`;
     }).join('');
     this.openModal(`<h2>${icon('bulb', 'title')} Centre de recherche</h2><p>Des améliorations qui boostent <b>tous</b> tes employés.</p><div class="upg-grid">${items}</div>`, 'research');
+  }
+
+  openGoals() {
+    const g = this.game;
+    const list = g.activeGoals(4).map((goal) => {
+      const st = g.goalState(goal);
+      const k = st.target ? st.cur / st.target : 0;
+      const isMoney = /chiffre|CA /.test(goal.text);
+      const prog = isMoney ? `${money(st.cur)} / ${money(st.target)}` : `${fmt(st.cur)} / ${fmt(st.target)}`;
+      return `<div class="goal ${st.ready ? 'ready' : ''}">
+        <div class="gi">${icon(st.ready ? 'trophy' : 'target')}</div>
+        <div><b>${goal.text}</b><small>${prog} · prime ${money(goalReward(goal, g.earnRate))}</small><div class="bar"><i style="width:${Math.min(100, k * 100)}%"></i></div></div>
+        ${st.ready ? `<button class="btn gold" data-action="claim" data-id="${goal.id}">Réclamer</button>` : `<small>${Math.floor(k * 100)} %</small>`}
+      </div>`;
+    }).join('');
+    const done = g.goalsDone.size;
+    this.openModal(`<h2>${icon('target', 'title')} Objectifs</h2><p>Des étapes pour guider ton empire. Chaque objectif rapporte une prime.</p>
+      <div class="goal-list">${list || '<p>Tous les objectifs sont accomplis. Bravo !</p>'}</div>
+      <div class="goal-done">${icon('check', 'inline')} ${done} / ${GOALS.length} objectifs réussis</div>`, 'goals');
+  }
+
+  openIPO() {
+    const g = this.game;
+    const ipo = g.ipo;
+    const missing = Math.max(0, ipo.need - g.totalEarned);
+    const status = g.totalEarned < ipo.need
+      ? `<p class="note">${icon('lock', 'inline')} Encore <b>${money(missing)}</b> de chiffre d'affaires dans cette partie avant de pouvoir entrer en bourse (minimum ${money(ipo.need)}).</p>`
+      : ipo.gain < 1 ? `<p class="note">${icon('info', 'inline')} Pas encore assez de valeur créée pour émettre de nouvelles actions.</p>`
+        : `<p class="note">${icon('bulb', 'inline')} Conseil : la plupart des investisseurs attendent de pouvoir au moins doubler leur nombre d'actions.</p>`;
+    this.openModal(`<h2>${icon('bourse', 'title')} Entrée en bourse — SIX Swiss Exchange</h2>
+      <p>Introduis ta société en bourse : tu revends tout ton empire contre des <b>actions</b>. Chaque action augmente <b>définitivement</b> tous tes revenus de ${pct(SHARE_BONUS, 0)}. Plus ton chiffre d'affaires cumulé est élevé, plus tu reçois d'actions.</p>
+      <div class="ipo-hero">
+        <div class="big-stat"><small>${icon('bourse', 'inline')} Actions détenues</small><b>${fmt(g.shares)}</b><small>+${pct(ipo.bonus, 0)} de revenus</small></div>
+        <div class="big-stat hl"><small>${icon('plus', 'inline')} Nouvelles actions</small><b>+${fmt(ipo.gain)}</b><small>après : +${pct(ipo.after, 0)}</small></div>
+        <div class="big-stat"><small>${icon('coins', 'inline')} CA cumulé (total)</small><b>${money(g.lifetimeEarned)}</b><small>introductions : ${g.ipoCount}</small></div>
+      </div>
+      <div class="ipo-cols">
+        <div><b>${icon('check', 'inline')} Tu gardes</b><ul><li>Tes actions et leur bonus</li><li>Ton canton et le calendrier</li><li>Tes objectifs réussis et statistiques</li></ul></div>
+        <div><b>${icon('warning', 'inline')} Tu revends</b><ul><li>Commerces, employés et terrains</li><li>Recherches et trésorerie</li><li>La ville redevient à l'abandon</li></ul></div>
+      </div>
+      ${status}
+      <button class="btn big ${ipo.available ? 'green' : ''}" ${ipo.available ? 'data-action="ipo"' : 'disabled'}>${icon('bourse', 'inline')} Entrer en bourse (+${fmt(ipo.gain)} actions)</button>`, 'ipo');
+  }
+
+  showIPODone(gain) {
+    const g = this.game;
+    this.openModal(`<h2>${icon('bourse', 'title')} Bienvenue à la SIX Swiss Exchange !</h2>
+      <p>Ton introduction en bourse est un succès : <b>+${fmt(gain)} actions</b>. Tu détiens maintenant <b>${fmt(g.shares)} actions</b>, soit <b>+${pct(SHARE_BONUS * g.shares, 0)}</b> sur tous tes revenus, pour toujours.</p>
+      <p>Une nouvelle ville t'attend : rachète les terrains, reconstruis et va encore plus loin.</p>
+      <button class="btn big gold" data-action="close-modal">C'est parti !</button>`, 'ipo-done');
   }
 
   ledgerTable(l, title, final) {
@@ -450,11 +509,13 @@ export class UI {
       <div class="big-stat-grid">
         <div class="big-stat"><small>${icon('coins', 'inline')} CA cumulé</small><b>${money(g.totalEarned)}</b></div>
         <div class="big-stat"><small>${icon('stats', 'inline')} Revenus</small><b>${money(g.rate)}/s</b></div>
-        <div class="big-stat"><small>${icon('building', 'inline')} Commerces</small><b>${g.buildings.size}/24</b></div>
+        <div class="big-stat"><small>${icon('building', 'inline')} Commerces</small><b>${g.buildings.size}/48</b></div>
         <div class="big-stat"><small>${icon('bag', 'inline')} Livraisons</small><b>${fmt(s.deposits)}</b></div>
         <div class="big-stat"><small>${icon('contract', 'inline')} Salaires versés</small><b>${money(s.wagesPaid)}</b></div>
         <div class="big-stat"><small>${icon('percent', 'inline')} Impôts payés</small><b>${money(s.taxesPaid)}</b></div>
         <div class="big-stat"><small>${icon('briefcase', 'inline')} Valises dorées</small><b>${s.golden}</b></div>
+        <div class="big-stat"><small>${icon('bourse', 'inline')} Actions SIX</small><b>${fmt(g.shares)}</b></div>
+        <div class="big-stat"><small>${icon('target', 'inline')} Objectifs</small><b>${g.goalsDone.size}/${GOALS.length}</b></div>
         <div class="big-stat"><small>${icon('clock', 'inline')} Temps de jeu</small><b>${h}h ${m}m</b></div>
         ${byTier}
       </div>`, 'stats');
@@ -507,6 +568,10 @@ export class UI {
       g.chooseCanton(btn.dataset.id);
       this.closeModal();
       this.showTutorial(g.tutorial);
+    } else if (a === 'claim') { g.claimGoal(btn.dataset.id); this.openGoals(); }
+    else if (a === 'ipo') {
+      const ipo = g.ipo;
+      if (ipo.available && confirm(`Entrer en bourse ?\n\nTu reçois ${fmt(ipo.gain)} actions (+${pct(SHARE_BONUS * ipo.gain, 0)} de revenus pour toujours), mais tu revends tous tes commerces, terrains et recherches.`)) g.goPublic();
     } else if (a === 'upg') { g.buyUpgrade(btn.dataset.id); if (g.upgrades.has(btn.dataset.id)) this.openResearch(); }
     else if (a === 'q-mode') { const m = btn.dataset.mode; this.quality.setMode(m === 'auto' ? 'auto' : +m); this.openSettings(); }
     else if (a === 'q-fps') { this.quality.setFpsCap(+btn.dataset.fps); this.openSettings(); }
@@ -580,6 +645,9 @@ export class UI {
     }
     const any = UPGRADES.some((u) => !g.upgrades.has(u.id) && g.cash >= u.cost);
     $('research-dot').classList.toggle('hidden', !any);
+    $('goals-dot').classList.toggle('hidden', !g.claimableGoals);
+    const ipo = g.ipo;
+    $('ipo-dot').classList.toggle('hidden', !(ipo.available && ipo.gain >= Math.max(1, g.shares)));
 
     const t = this.current;
     if (t && t.workers && !this.panel.classList.contains('hidden')) {

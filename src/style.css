@@ -619,7 +619,29 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
 .dock-btn.teal { background: linear-gradient(180deg, #2fd0c3, #0f8f86); box-shadow: 0 5px 0 #0a5f59, inset 0 1px 0 rgba(255,255,255,.35); }
 .dock-btn.gold { background: linear-gradient(180deg, #ffd96a, #f2a80f); color: #3a2400; text-shadow: 0 1px 0 rgba(255,255,255,.35); box-shadow: 0 5px 0 #b4740a, inset 0 1px 0 rgba(255,255,255,.55); }
 .dock-btn.blue { background: linear-gradient(180deg, #6ab0ff, #2563eb); box-shadow: 0 5px 0 #1e3a8a, inset 0 1px 0 rgba(255,255,255,.35); }
-.dock-btn:active.violet, .dock-btn:active.teal, .dock-btn:active.gold, .dock-btn:active.blue { box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.dock-btn.coral { background: linear-gradient(180deg, #ff8a80, #e5484d); box-shadow: 0 5px 0 #9f2a2f, inset 0 1px 0 rgba(255,255,255,.35); }
+.dock-btn.green { background: linear-gradient(180deg, #5ee08f, #1e9e5a); box-shadow: 0 5px 0 #136b3c, inset 0 1px 0 rgba(255,255,255,.35); }
+.dock-btn:active.violet, .dock-btn:active.teal, .dock-btn:active.gold, .dock-btn:active.blue, .dock-btn:active.coral, .dock-btn:active.green { box-shadow: 0 1px 0 rgba(0,0,0,.35); }
+
+/* objectives & stock exchange */
+.goal-list { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+.goal { display: grid; grid-template-columns: 44px 1fr auto; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 16px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); }
+.goal .gi { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: rgba(255,255,255,.08); }
+.goal .gi .ic { width: 26px; height: 26px; }
+.goal b { display: block; font-family: var(--display); font-weight: 600; font-size: 15px; }
+.goal small { color: var(--muted); font-size: 12.5px; }
+.goal .bar { height: 7px; border-radius: 6px; background: rgba(255,255,255,.1); margin-top: 7px; overflow: hidden; }
+.goal .bar i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #ff8a80, #ffd166); }
+.goal.ready { border-color: rgba(255, 209, 102, .6); background: linear-gradient(180deg, rgba(255,209,102,.16), rgba(255,209,102,.05)); }
+.goal.ready .bar i { background: linear-gradient(90deg, #5ee08f, #b9f6ca); }
+.goal-done { margin-top: 12px; color: var(--muted); font-size: 13px; }
+.ipo-hero { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0; }
+.ipo-hero .big-stat b { font-size: 22px; }
+.ipo-hero .big-stat.hl { background: linear-gradient(180deg, rgba(94,224,143,.22), rgba(94,224,143,.06)); border-color: rgba(94,224,143,.5); }
+.ipo-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px; margin: 10px 0 14px; }
+.ipo-cols div { padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.05); }
+.ipo-cols ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+@media (max-width: 600px) { .ipo-hero { grid-template-columns: 1fr; } .ipo-cols { grid-template-columns: 1fr; } }
 .dock-btn .dot { top: 6px; right: 8px; }
 
 /* side panel sits between HUD and dock */
@@ -639,7 +661,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
   .time-card small, .time-card .open-tag { display: none; }
   .round { width: 40px; height: 40px; border-radius: 14px; }
   #dock { bottom: 8px; gap: 6px; padding: 7px; border-radius: 20px; }
-  .dock-btn { width: 66px; height: 58px; font-size: 11.5px; border-radius: 15px; }
+  .dock-btn { width: min(66px, calc((100vw - 64px) / 6)); height: 58px; font-size: 10.5px; border-radius: 15px; }
   .dock-btn > i:first-child { width: 28px; height: 28px; }
   .panel { top: auto; bottom: 84px; max-height: 56vh; }
   .tutorial { bottom: 84px; width: calc(100vw - 16px); max-width: none; }

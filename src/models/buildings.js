@@ -397,57 +397,139 @@ const MODELS = {
 
   mine(b, level, ctx) {
     const r = rng(42);
-    b.blob(5.0, '#8e959e', { x: 0, y: 1.4, z: -2.6, sy: 0.92, sx: 1.12 }, 2);
-    b.blob(3.4, '#7d848d', { x: -3.7, y: 0.8, z: -1.5 }, 2);
-    b.blob(3.0, '#a3a9b0', { x: 3.7, y: 0.7, z: -1.0 }, 2);
-    b.blob(2.2, '#737a83', { x: 1.6, y: 5.0, z: -3.6 }, 2);
-    b.blob(1.6, '#f8fafc', { x: 0.3, y: 6.25, z: -3.2, sy: 0.55 }, 2);
-    for (let i = 0; i < 8; i++) b.blob(0.4 + r() * 0.4, '#9aa0a8', { x: -5 + r() * 10, y: 0.2, z: 1 + r() * 2.6, sy: 0.6 }, 1);
-    b.blob(0.9, PAL.greenD, { x: -4.6, y: 2.5, z: -0.2 }, 1);
-    b.blob(0.7, PAL.green, { x: 4.8, y: 2.2, z: 0.2 }, 1);
-    // entrance
-    b.box(2.6, 2.8, 2.0, '#0b0b0f', { y: 0, z: 1.2, sharp: true });
-    b.box(0.42, 3.3, 0.42, WOOD, { x: -1.5, z: 2.3, r: 0.12 });
-    b.box(0.42, 3.3, 0.42, WOOD, { x: 1.5, z: 2.3, r: 0.12 });
-    b.box(3.8, 0.45, 0.5, WOOD_D, { y: 3.0, z: 2.3, r: 0.12 });
-    b.box(3.2, 0.75, 0.14, '#6f4627', { y: 3.5, z: 2.5, r: 0.08 });
-    b.box(2.6, 0.12, 0.05, '#ffd43b', { y: 3.85, z: 2.58, mat: 'neon', sharp: true });
-    for (const x of [-1.5, 1.5]) {
-      b.box(0.12, 0.3, 0.12, PAL.dark, { x, y: 2.6, z: 2.65, sharp: true });
-      b.sphere(0.2, PAL.lit, { x, y: 2.5, z: 2.75, mat: 'lit' }, 10, 8);
-    }
-    // rails
-    for (const x of [-0.5, 0.5]) b.box(0.1, 0.1, 4.2, '#9ca3af', { x, y: 0.12, z: 3.6, mat: 'metal', sharp: true });
-    for (let i = 0; i < 6; i++) b.box(1.5, 0.1, 0.25, WOOD_D, { y: 0.02, z: 1.8 + i * 0.7, r: 0.03 });
-    // minecart
-    b.group({ x: 0, y: 0.2, z: 4.5 }, () => {
-      b.box(1.5, 0.9, 1.6, '#4b5563', { y: 0.3, mat: 'metal', r: 0.15 });
-      b.box(1.62, 0.14, 1.72, '#374151', { y: 1.15, mat: 'metal', r: 0.06 });
-      for (const [x, z] of [[-0.6, 0.55], [0.6, 0.55], [-0.6, -0.55], [0.6, -0.55]]) {
-        b.cyl(0.24, 0.24, 0.14, '#1f2937', { x, y: 0.24, z, rz: Math.PI / 2 }, 12);
-      }
-      for (let i = 0; i < 5; i++) b.octa(0.26, ['#67e8f9', '#f0abfc', '#a78bfa'][i % 3], { x: -0.4 + (i % 3) * 0.4, y: 1.35, z: i < 3 ? -0.25 : 0.3, sy: 1.4, mat: 'neon' });
+    // ---- layered rock cliff (strata) with grassy ledges and a snowy top ----
+    const strata = ['#c9a37a', '#b0896a', '#9c7b62', '#8f8a86'];
+    const tiers = [
+      { w: 12.6, d: 6.8, h: 3.0, x: 0, z: -2.9 },
+      { w: 10.4, d: 5.2, h: 2.6, x: 0.5, z: -3.6 },
+      { w: 7.6, d: 3.8, h: 2.2, x: 1.1, z: -4.2 },
+      { w: 4.4, d: 2.6, h: 1.6, x: 1.6, z: -4.6 },
+    ];
+    let y = 0;
+    tiers.forEach((t, i) => {
+      b.box(t.w, t.h, t.d, strata[i], { x: t.x, y, z: t.z, r: 0.45 });
+      // darker band in the middle of every tier
+      b.box(t.w + 0.06, t.h * 0.22, t.d + 0.06, shade(strata[i], 0.86), { x: t.x, y: y + t.h * 0.4, z: t.z, r: 0.1 });
+      // ledge cap
+      const cap = i === tiers.length - 1 ? '#f4f7fa' : '#6fae3d';
+      b.box(t.w - 0.3, 0.28, t.d - 0.3, cap, { x: t.x, y: y + t.h - 0.05, z: t.z, r: 0.14 });
+      y += t.h;
     });
-    // crystals
-    const n = 5 + level * 2;
-    for (let i = 0; i < n; i++) {
-      const a = r() * Math.PI - Math.PI;
-      const rad = 3 + r() * 2.2;
-      const x = Math.cos(a) * rad * 1.1;
-      const z = -2.6 + Math.sin(a) * rad * 0.7;
-      const y = 1.2 + r() * 3.5 * (1 - Math.abs(x) / 7);
-      const col = ['#67e8f9', '#f0abfc', '#a78bfa', '#5eead4'][Math.floor(r() * 4)];
-      b.octa(0.35 + r() * 0.4, col, { x, y, z, sy: 2 + r(), rx: r() - 0.5, rz: r() - 0.5, mat: 'neon' });
+    // boulders and pines on the ledges
+    for (const [x, yy, z, s] of [[-5.6, 0, 0.6, 0.8], [5.8, 0, 0.2, 0.6], [-4.6, 3.0, -1.4, 0.55], [4.9, 3.0, -1.6, 0.5]]) {
+      b.blob(s, '#9a9289', { x, y: yy + s * 0.5, z, sy: 0.75 }, 1);
     }
-    barrel(b, { x: -3.6, y: 0, z: 3.4, color: '#a0612f' });
-    crate(b, { x: -4.6, y: 0, z: 2.6, s: 0.9 });
-    b.box(0.1, 1.6, 0.1, WOOD, { x: -2.6, z: 3.4, rz: 0.3, r: 0.03 });
-    b.box(0.9, 0.14, 0.14, '#9ca3af', { x: -2.85, y: 1.5, z: 3.4, rz: 0.3, mat: 'metal', r: 0.05 });
+    for (const [x, yy, z, s] of [[-4.2, 3.0, -4.2, 1], [-2.9, 5.6, -4.9, 0.8], [4.4, 5.6, -5.0, 0.7], [5.6, 3.0, -4.6, 0.9]]) {
+      b.cyl(0.12, 0.16, 0.8 * s, '#7a5233', { x, y: yy, z }, 6);
+      b.cone(0.75 * s, 2.0 * s, '#2f7a4f', { x, y: yy + 0.6 * s, z }, 8);
+      b.cone(0.55 * s, 1.4 * s, '#3c9160', { x, y: yy + 1.5 * s, z }, 8);
+    }
+    // glowing crystal veins in the rock faces (more with every level)
+    const veins = 4 + level * 2;
+    const cols = ['#67e8f9', '#f0abfc', '#a78bfa', '#5eead4'];
+    for (let i = 0; i < veins; i++) {
+      const ti = Math.min(tiers.length - 1, (r() * (1 + level / 3)) | 0);
+      const t = tiers[ti];
+      const base = tiers.slice(0, ti).reduce((a, q) => a + q.h, 0);
+      let x = t.x + (r() - 0.5) * (t.w - 1.2);
+      if (ti === 0 && Math.abs(x + 0.6) < 2.2) x = x < -0.6 ? -3.2 : 2.2; // keep the portal clear
+      const cy = base + 0.5 + r() * (t.h - 1.0);
+      const col = cols[(r() * 4) | 0];
+      b.octa(0.22 + r() * 0.2, col, { x, y: cy, z: t.z + t.d / 2 + 0.05, sy: 1.6, rz: (r() - 0.5) * 0.8, mat: 'neon' });
+      b.octa(0.14 + r() * 0.1, col, { x: x + 0.3, y: cy - 0.2, z: t.z + t.d / 2 + 0.1, sy: 1.4, rz: 0.5, mat: 'neon' });
+    }
+    if (level >= 6) {
+      // giant crystal on the summit
+      b.octa(0.9, '#a78bfa', { x: 1.6, y: y + 1.0, z: -4.6, sy: 1.9, mat: 'neon' });
+      b.octa(0.5, '#67e8f9', { x: 2.4, y: y + 0.4, z: -4.3, sy: 1.6, rz: -0.4, mat: 'neon' });
+    }
+
+    // ---- stone portal with timber lining ----
+    const px = -0.6, pz = 0.5;
+    b.box(2.6, 2.7, 0.6, '#0d0c10', { x: px, z: pz - 0.25, sharp: true });
+    for (const dx of [-1.55, 1.55]) b.box(0.75, 2.5, 0.9, '#b8b1a6', { x: px + dx, z: pz, r: 0.2 });
+    b.torus(1.55, 0.42, '#b8b1a6', { x: px, y: 2.45, z: pz, mat: 'std' }, Math.PI, 6, 14);
+    b.box(0.95, 0.75, 0.95, '#cfc8bc', { x: px, y: 3.6, z: pz, r: 0.18 }); // keystone
+    for (const dx of [-1.05, 1.05]) b.box(0.26, 2.5, 0.26, WOOD_D, { x: px + dx, z: pz + 0.25, r: 0.06 });
+    b.box(2.4, 0.3, 0.3, WOOD_D, { x: px, y: 2.4, z: pz + 0.25, r: 0.06 });
+    b.box(2.0, 0.55, 0.12, '#3b2a1c', { x: px, y: 4.35, z: pz + 0.32, r: 0.05 });
+    b.box(1.6, 0.14, 0.05, '#ffd43b', { x: px, y: 4.45, z: pz + 0.4, mat: 'neon', sharp: true });
+    for (const dx of [-2.2, 1.0]) {
+      b.box(0.1, 0.5, 0.1, PAL.dark, { x: px + dx + 0.6, y: 2.2, z: pz + 0.5, sharp: true });
+      b.sphere(0.2, PAL.lit, { x: px + dx + 0.6, y: 2.05, z: pz + 0.62, mat: 'lit' }, 10, 8);
+    }
+    // ---- rails out of the tunnel, with a loaded minecart ----
+    for (const x of [-0.45, 0.45]) b.box(0.1, 0.1, 6.2, '#9ca3af', { x, y: 0.14, z: 3.4, mat: 'metal', sharp: true });
+    for (let i = 0; i < 9; i++) b.box(1.4, 0.1, 0.26, WOOD_D, { y: 0.04, z: 0.7 + i * 0.68, r: 0.03 });
+    b.box(1.6, 0.6, 0.3, '#e0573f', { y: 0.1, z: 6.45, r: 0.08 }); // buffer stop
+    b.group({ x: 0, y: 0.2, z: 4.5 }, () => {
+      b.box(1.4, 0.85, 1.6, '#5b6472', { y: 0.3, mat: 'metal', r: 0.18 });
+      b.box(1.52, 0.14, 1.72, '#3b424d', { y: 1.1, mat: 'metal', r: 0.06 });
+      for (const [x, z] of [[-0.6, 0.55], [0.6, 0.55], [-0.6, -0.55], [0.6, -0.55]]) b.cyl(0.24, 0.24, 0.14, '#1f2937', { x, y: 0.24, z, rz: Math.PI / 2 }, 12);
+      for (let i = 0; i < 6; i++) b.octa(0.24, cols[i % 4], { x: -0.4 + (i % 3) * 0.4, y: 1.32, z: i < 3 ? -0.3 : 0.3, sy: 1.4, mat: 'neon' });
+    });
+
+    // ---- headframe (chevalement) with its winding wheel ----
+    const hx = -4.3, hz = 2.0, H = 7.6;
+    for (const [dx, dz] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) {
+      b.box(0.24, H, 0.24, '#c0392b', { x: hx + dx * 0.55, z: hz + dz * 0.55, rx: dz * 0.06, rz: -dx * 0.06, sharp: true });
+    }
+    for (let k = 1; k < 4; k++) {
+      const yy = (k * H) / 4;
+      b.box(1.4, 0.12, 0.12, '#c0392b', { x: hx, y: yy, z: hz - 0.5, sharp: true });
+      b.box(1.4, 0.12, 0.12, '#c0392b', { x: hx, y: yy, z: hz + 0.5, sharp: true });
+      b.box(1.6, 0.1, 0.1, '#d35445', { x: hx, y: yy - 0.9, z: hz + 0.5, rz: 0.55, sharp: true });
+    }
+    b.box(1.8, 0.3, 1.8, '#5f6875', { x: hx, y: H, z: hz, mat: 'metal', r: 0.06 });
+    b.box(0.22, 6.6, 0.22, '#c0392b', { x: hx + 1.6, y: 0, z: hz + 2.2, rx: -0.35, rz: 0.22, sharp: true }); // back-stay
+    b.box(1.3, 1.7, 1.1, '#5f6875', { x: hx, y: 0, z: hz, r: 0.12 }); // cage at the shaft
+    // winding house with a little chimney
+    plankBox(b, 2.4, 2.2, 2.0, '#b4513a', { x: hx + 0.1, y: 0, z: hz + 3.6, dir: 'h', step: 0.36 });
+    tinRoof(b, { x: hx + 0.1, y: 2.2, z: hz + 2.4, w: 2.8, d: 2.4 });
+    b.cyl(0.18, 0.2, 1.4, '#5f6875', { x: hx + 0.8, y: 2.5, z: hz + 3.2 }, 8);
+    ctx.emitters.push(new THREE.Vector3(hx + 0.8, 4.1, hz + 3.2));
+    for (const dx of [-0.25, 0.25]) b.box(0.04, 0.04, 3.8, '#2e3440', { x: hx + dx, y: 4.6, z: hz + 1.7, rx: 0.95, sharp: true }); // cables
+    const wheel = new MeshBuilder({ lod: 0 });
+    wheel.torus(1.05, 0.1, '#2e3440', { mat: 'metal' }, Math.PI * 2, 6, 24);
+    wheel.torus(0.88, 0.05, '#c0392b', {}, Math.PI * 2, 4, 20);
+    for (let k = 0; k < 6; k++) wheel.group({ rz: (k * Math.PI) / 6 }, () => wheel.box(0.08, 1.9, 0.08, '#2e3440', { y: -0.95, sharp: true, mat: 'metal' }));
+    wheel.cyl(0.18, 0.18, 0.3, '#ffd43b', { z: -0.15, rx: Math.PI / 2 }, 10);
+    const wheelMesh = wheel.build({ castShadow: false });
+    wheelMesh.position.set(hx, H + 1.35, hz);
+    wheelMesh.rotation.y = Math.PI / 2;
+    ctx.extra.push(wheelMesh);
+    ctx.animated.push((t) => { wheelMesh.rotation.x = t * 1.6; });
+
+    // ---- ore processing: conveyor from the upper ledge into a hopper ----
+    if (level >= 2) {
+      const cx0 = 3.4, cy0 = 3.1, cz0 = -0.4, cx1 = 4.6, cy1 = 4.6, cz1 = 3.4;
+      const len = Math.hypot(cx1 - cx0, cy1 - cy0, cz1 - cz0);
+      const ang = Math.atan2(cy1 - cy0, Math.hypot(cx1 - cx0, cz1 - cz0));
+      b.group({ x: (cx0 + cx1) / 2, y: (cy0 + cy1) / 2, z: (cz0 + cz1) / 2, ry: Math.atan2(cx1 - cx0, cz1 - cz0) }, () => {
+        b.box(0.9, 0.22, len, '#3b424d', { y: -0.11, rx: -ang, mat: 'metal', r: 0.05 });
+        b.box(0.7, 0.06, len - 0.2, '#22262d', { y: 0.02, rx: -ang, sharp: true });
+      });
+      for (const k of [0.35, 0.75]) {
+        const x = cx0 + (cx1 - cx0) * k, yy = cy0 + (cy1 - cy0) * k, z = cz0 + (cz1 - cz0) * k;
+        b.box(0.14, yy - 0.2, 0.14, '#5f6875', { x, z, sharp: true, mat: 'metal' });
+      }
+      // hopper on legs
+      for (const [dx, dz] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) b.box(0.16, 3.2, 0.16, '#f2a541', { x: 4.6 + dx, z: 3.9 + dz, sharp: true });
+      b.box(2.0, 1.2, 2.0, '#f2a541', { x: 4.6, y: 3.2, z: 3.9, r: 0.15 });
+      b.cone(1.0, 1.2, '#d98c2b', { x: 4.6, y: 3.2, z: 3.9, rx: Math.PI }, 4);
+      for (let i = 0; i < 5; i++) b.octa(0.28, cols[i % 4], { x: 4.1 + (i % 3) * 0.45, y: 0.3 + (i > 2 ? 0.3 : 0), z: 3.7 + (i % 2) * 0.5, sy: 1.5, mat: 'neon' });
+    }
     if (level >= 4) {
-      plankBox(b, 2.6, 2.2, 2.2, WOOD, { x: 4.2, y: 0, z: 3.0 });
-      tinRoof(b, { x: 4.2, y: 2.4, z: 1.8, w: 3.0, d: 2.6 });
-      win(b, { x: 4.2, y: 0.9, z: 4.1, w: 0.9, h: 0.8, frame: WHITE });
+      // site office
+      plankBox(b, 2.2, 2.1, 1.8, WOOD, { x: 4.8, y: 0, z: 0.9 });
+      tinRoof(b, { x: 4.8, y: 2.1, z: -0.2, w: 2.6, d: 2.2 });
+      win(b, { x: 4.8, y: 0.9, z: 1.81, w: 0.8, h: 0.7, frame: WHITE });
     }
+    barrel(b, { x: -2.6, y: 0, z: 5.2, color: '#a0612f' });
+    crate(b, { x: -3.4, y: 0, z: 6.0, s: 0.8 });
+    b.box(0.1, 1.6, 0.1, WOOD, { x: 1.9, z: 6.0, rz: 0.3, r: 0.03 });
+    b.box(0.9, 0.14, 0.14, '#9ca3af', { x: 1.65, y: 1.5, z: 6.0, rz: 0.3, mat: 'metal', r: 0.05 });
+    ctx.height = 11;
     ctx.door = { out: [-1.0, 3.0], in: [-1.0, 0.6] };
     ctx.spots = { cart: [1.45, 4.5, -Math.PI / 2] };
   },

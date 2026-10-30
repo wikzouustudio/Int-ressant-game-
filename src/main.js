@@ -6,6 +6,7 @@ import { createEnvironment } from './world/environment.js';
 import { Game } from './game/game.js';
 import { UI } from './ui/ui.js';
 import { icon } from './ui/icons.js';
+import * as CFG from './game/config.js';
 
 document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
 
@@ -51,7 +52,8 @@ async function boot() {
   ui.refresh();
   if (!game.canton) ui.openCanton();
   else ui.showTutorial(game.tutorial);
-  if (result && result.offline > 0) ui.showOffline(result.offline, result.elapsed);
+  if (game.ipoJustDone) ui.showIPODone(game.ipoJustDone);
+  else if (result && result.offline > 0) ui.showOffline(result.offline, result.elapsed);
   await step(100);
 
   // Warm up shaders before revealing the scene
@@ -123,6 +125,7 @@ async function boot() {
 
   window.__game = game; // handy for debugging in the console
   window.__quality = quality;
+  window.__cfg = CFG;
 }
 
 /** Small on-screen profiler (Paramètres → Statistiques de performance). */

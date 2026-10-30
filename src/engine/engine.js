@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { CITY_HALF } from '../game/config.js';
+import { R_WORLD } from '../world/citymap.js';
 
 export function createEngine(container) {
   const mobile = matchMedia('(pointer: coarse)').matches;
@@ -26,7 +26,7 @@ export function createEngine(container) {
   const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.8, 3000);
   camera.position.set(58, 72, 100);
 
-  const cityCam = new CityCamera(camera, renderer.domElement, CITY_HALF);
+  const cityCam = new CityCamera(camera, renderer.domElement, R_WORLD - 40);
   // `controls` keeps the small surface the rest of the code relies on
   const controls = { target: cityCam.target, cam: cityCam };
 

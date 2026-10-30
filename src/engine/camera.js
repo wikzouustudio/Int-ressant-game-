@@ -22,7 +22,7 @@ export class CityCamera {
     this.pitch = this.goal.pitch; // elevation angle (rad)
     this.distance = this.goal.distance;
     this.minDistance = 18;
-    this.maxDistance = 260;
+    this.maxDistance = 330;
     this.velocity = new THREE.Vector3();
     this.pointers = new Map();
     this.gesture = null;

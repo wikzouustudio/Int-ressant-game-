@@ -2,23 +2,23 @@ import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { MeshBuilder, rng } from '../models/builder.js';
 import { setNightLevel } from '../models/materials.js';
-import { CELL, GRID, DECOR, ROAD_Y, CITY_HALF, PLAY_HALF, ROAD_W, CARRIAGE, isMainRoad } from '../game/config.js';
-import { buildCityscape } from '../models/cityscape.js';
+import { CELL, GRID, ROAD_Y, PLAY_HALF, ROAD_W, CARRIAGE, isMainRoad } from '../game/config.js';
+import { buildDistricts } from '../models/districts.js';
+import { buildRoadNetwork, buildTrain } from './roadmesh.js';
+import { TREES, WATER, R_WORLD, R_RAIL } from './citymap.js';
 
 const LAMP_RY = -Math.PI / 4;
-// Road grid lines (x = const and z = const), covering the playable district and the
-// decorative rings around it. Both arrays include the outer boundary roads.
+// Street grid of the playable district (x = const and z = const lines, boundary roads
+// included). The districts around it have their own curved network (citymap.js).
 export const ROADS = [];
-for (let k = -(GRID + DECOR) - 1; k <= GRID + DECOR; k++) ROADS.push((k + 0.5) * CELL);
+for (let k = -GRID - 1; k <= GRID; k++) ROADS.push((k + 0.5) * CELL);
 export const ROADS_X = ROADS;
 export const ROADS_Z = ROADS;
 /** Road lines that lie inside the playable district (golden briefcases, events). */
 export const PLAY_ROADS = ROADS.filter((v) => Math.abs(v) <= PLAY_HALF + 0.1);
-export const CITY_MIN_X = -CITY_HALF;
-export const CITY_MAX_X = CITY_HALF;
-export const CITY_MIN_Z = -CITY_HALF;
-export const CITY_MAX_Z = CITY_HALF;
-const POND = { x: -(CITY_HALF + 48), z: 10 };
+/** Avenues that continue out of the district: [line, side] → true (side = ±1 towards the outside). */
+const EXITS = new Set(['x|10|1', 'x|-10|1', 'z|10|1', 'z|-10|1', 'z|10|-1', 'z|-10|-1']);
+const continues = (axis, v, side) => EXITS.has(`${axis}|${v}|${side}`);
 
 const smooth = (a, b, x) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -29,11 +29,13 @@ const groundNoise = (x, z) => Math.sin(x * 0.05) * Math.cos(z * 0.06) + Math.sin
 
 export function heightAt(x, z) {
   const n = groundNoise(x, z);
-  const dCity = Math.max(Math.abs(x) - CITY_HALF - 8, Math.abs(z) - CITY_HALF - 8, 0);
+  const dCity = Math.max(Math.hypot(x, z) - R_WORLD, 0);
   let h = 0;
-  if (dCity > 0) h = smooth(0, 60, dCity) * (2.5 + n * 2.5) + smooth(120, 400, dCity) * 25 * (0.6 + 0.4 * Math.sin(x * 0.01 + z * 0.012));
-  const pd = Math.hypot(x - POND.x, z - POND.z);
-  if (pd < 30) h = Math.min(h, -0.6 * (1 - pd / 30) + h * (pd / 30));
+  if (dCity > 0) h = smooth(0, 60, dCity) * (2.5 + n * 2.5) + smooth(60, 300, dCity) * 25 * (0.6 + 0.4 * Math.sin(x * 0.01 + z * 0.012));
+  for (const w of WATER) {
+    const d = Math.hypot((x - w.x) / (w.rx + 4), (z - w.z) / (w.rz + 4));
+    if (d < 1) h = Math.min(h, -0.7 * (1 - d * d));
+  }
   return h;
 }
 
@@ -116,7 +118,7 @@ export function createEnvironment(engine) {
 
   // ---------------- Streets: asphalt carriageways, raised sidewalks, markings ----------------
   const paveTex = makePavingTexture(renderer);
-  const span = 2 * CITY_HALF + ROAD_W;
+  const span = 2 * PLAY_HALF + CARRIAGE;
   const H_ASPH = 0.06;
   const asphMain = [], asphSec = [], walks = [], curbs = [], marks = [];
   const box = (list, x, y, z, w, h, d) => {
@@ -131,10 +133,26 @@ export function createEnvironment(engine) {
     box(main ? asphMain : asphSec, v, 0, 0, CARRIAGE, H_ASPH, span);
   }
   // sidewalks run between intersections; corner squares join them
+  const last = ROADS.length - 1;
   for (const v of ROADS) {
+    // outer side of the boundary roads: one continuous sidewalk, open only where an avenue leaves
+    const edge = v === ROADS[0] ? -1 : v === ROADS[last] ? 1 : 0;
+    if (edge) {
+      const off = v + edge * (ch + sw / 2), coff = v + edge * (ch + 0.06);
+      for (const horiz of [true, false]) {
+        // horiz: road z = v (its sidewalk runs along x), open where an avenue x = w leaves the district
+        const cuts = [-PLAY_HALF - ch - sw, ...ROADS.filter((w) => continues(horiz ? 'x' : 'z', w, edge)).flatMap((w) => [w - ch, w + ch]), PLAY_HALF + ch + sw];
+        for (let q = 0; q < cuts.length; q += 2) {
+          const len = cuts[q + 1] - cuts[q], mid = (cuts[q] + cuts[q + 1]) / 2;
+          if (horiz) { box(walks, mid, 0, off, len, ROAD_Y, sw); box(curbs, mid, 0, coff, len, ROAD_Y + 0.02, 0.12); }
+          else { box(walks, off, 0, mid, sw, ROAD_Y, len); box(curbs, coff, 0, mid, 0.12, ROAD_Y + 0.02, len); }
+        }
+      }
+    }
     for (let k = 0; k < ROADS.length - 1; k++) {
       const a0 = ROADS[k] + ch, a1 = ROADS[k + 1] - ch, len = a1 - a0, mid = (a0 + a1) / 2;
       for (const side of [-1, 1]) {
+        if (side === edge) continue;
         const off = v + side * (ch + sw / 2);
         box(walks, mid, 0, off, len, ROAD_Y, sw);
         box(walks, off, 0, mid, sw, ROAD_Y, len);
@@ -144,7 +162,11 @@ export function createEnvironment(engine) {
     }
   }
   for (const x of ROADS) for (const z of ROADS) {
-    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) box(walks, x + sx * (ch + sw / 2), 0, z + sz * (ch + sw / 2), sw, ROAD_Y, sw);
+    for (const [sx, sz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const cx = x + sx * (ch + sw / 2), cz = z + sz * (ch + sw / 2);
+      if (Math.abs(cx) > PLAY_HALF + ch || Math.abs(cz) > PLAY_HALF + ch) continue; // drawn by the outer sidewalk
+      box(walks, cx, 0, cz, sw, ROAD_Y, sw);
+    }
   }
   // markings: dashed centre line on main roads, zebra crossings at every intersection
   for (const v of ROADS) {
@@ -154,11 +176,12 @@ export function createEnvironment(engine) {
       if (main) for (let t = a0 + 1; t < a1 - 1; t += 3) { box(marks, t, H_ASPH, v, 1.6, 0.012, 0.16); box(marks, v, H_ASPH, t, 0.16, 0.012, 1.6); }
     }
     for (const w of ROADS) {
-      // crossings on the four arms of intersection (v, w)
+      // crossings on the arms of intersection (v, w) that lead somewhere
       for (const side of [-1, 1]) {
+        const out = Math.abs(v) === PLAY_HALF && Math.sign(v) === side;
         for (let q = -1.5; q <= 1.5; q += 0.75) {
-          box(marks, v + side * (half + 0.5), H_ASPH, w + q, 0.9, 0.012, 0.38);
-          box(marks, w + q, H_ASPH, v + side * (half + 0.5), 0.38, 0.012, 0.9);
+          if (!out || continues('z', w, side)) box(marks, v + side * (half + 0.5), H_ASPH, w + q, 0.9, 0.012, 0.38);
+          if (!out || continues('x', w, side)) box(marks, w + q, H_ASPH, v + side * (half + 0.5), 0.38, 0.012, 0.9);
         }
       }
     }
@@ -172,11 +195,15 @@ export function createEnvironment(engine) {
   mk(curbs, new THREE.MeshStandardMaterial({ color: '#c9c3b8', roughness: 0.8 }));
   mk(marks, new THREE.MeshStandardMaterial({ color: '#f1f3f5', roughness: 0.7 }));
 
-  // ---------------- Decorative city blocks around the playable district ----------------
-  const cityscape = buildCityscape();
-  root.add(cityscape.group);
+  // ---------------- Districts around the playable city ----------------
+  const network = buildRoadNetwork(renderer, paveTex);
+  root.add(network.group);
+  const districts = buildDistricts();
+  root.add(districts.group);
   const street = buildStreetscape();
   root.add(street);
+  const train = buildTrain();
+  root.add(train);
 
   // ---------------- Street lamps (instanced) ----------------
   const lampPos = [];
@@ -190,12 +217,13 @@ export function createEnvironment(engine) {
       for (let t = a0 + (main ? 0 : rl() * 4); t <= a1; t += step) {
         for (const side of main ? [-1, 1] : [rl() < 0.5 ? -1 : 1]) {
           // horizontal street (z = v) and vertical street (x = v); arm points at the carriageway
-          lampPos.push([t, v + side * lampOff, side > 0 ? -Math.PI / 2 : Math.PI / 2]);
-          if (main || rl() < 0.6) lampPos.push([v + side * lampOff, t, side > 0 ? 0 : Math.PI]);
+          if (!(Math.abs(v) === PLAY_HALF && Math.sign(v) === side)) lampPos.push([t, v + side * lampOff, side > 0 ? -Math.PI / 2 : Math.PI / 2]);
+          if ((main || rl() < 0.6) && !(Math.abs(v) === PLAY_HALF && Math.sign(v) === side)) lampPos.push([v + side * lampOff, t, side > 0 ? 0 : Math.PI]);
         }
       }
     }
   }
+  lampPos.push(...network.lamps);
   const lb = new MeshBuilder();
   lb.cyl(0.22, 0.3, 0.4, '#2b2f36', { mat: 'metal' }, 10);
   lb.cyl(0.08, 0.11, 4.6, '#2b2f36', { mat: 'metal' }, 8);
@@ -231,45 +259,32 @@ export function createEnvironment(engine) {
   poolMesh.renderOrder = 2;
   root.add(poolMesh);
 
-  // ---------------- Trees, rocks, flowers ----------------
+  // ---------------- Trees (forests, parks, gardens, countryside) ----------------
   const r = rng(1234);
-  const treeSpots = [];
-  const tryPlace = (x, z) => {
-    if (x > CITY_MIN_X - 6 && x < CITY_MAX_X + 6 && z > CITY_MIN_Z - 6 && z < CITY_MAX_Z + 6) return false;
-    if (Math.hypot(x - POND.x, z - POND.z) < 26) return false;
-    treeSpots.push([x, z]);
-    return true;
-  };
-  // dense belt around the city
-  for (let i = 0; i < 900 && treeSpots.length < 520; i++) {
-    const a = r() * Math.PI * 2;
-    const d = CITY_HALF + 14 + Math.pow(r(), 1.6) * 190;
-    tryPlace(Math.cos(a) * d * 1.05, 6 + Math.sin(a) * d);
-  }
+  const treeSpots = TREES;
 
   // Vegetation is split into spatial cells (one set of InstancedMeshes per cell) so each
   // cell can be frustum-culled, switched to a low-poly LOD and hidden beyond the draw distance.
   const geos = {
     trunk: [new THREE.CylinderGeometry(0.28, 0.42, 2.6, 10).translate(0, 1.3, 0), new THREE.CylinderGeometry(0.28, 0.42, 2.6, 5).translate(0, 1.3, 0)],
-    crown: [mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]], 2),
-      mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]], 1)],
-    pine: [new THREE.ConeGeometry(1.9, 5.5, 14).translate(0, 4.4, 0), new THREE.ConeGeometry(1.9, 5.5, 6).translate(0, 4.4, 0)],
-    pine2: [new THREE.ConeGeometry(1.4, 3.6, 14).translate(0, 6.6, 0), new THREE.ConeGeometry(1.4, 3.6, 6).translate(0, 6.6, 0)],
+    crown: [mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]], 1),
+      mergeBlobs([[0, 3.9, 0, 2.0], [0.9, 3.3, 0.6, 1.3], [-0.8, 3.4, -0.5, 1.2], [0.1, 5.0, -0.2, 1.3]], 0)],
+    pine: [new THREE.ConeGeometry(1.9, 5.5, 10).translate(0, 4.4, 0), new THREE.ConeGeometry(1.9, 5.5, 6).translate(0, 4.4, 0)],
+    pine2: [new THREE.ConeGeometry(1.4, 3.6, 10).translate(0, 6.6, 0), new THREE.ConeGeometry(1.4, 3.6, 6).translate(0, 6.6, 0)],
   };
   const trunkMat = new THREE.MeshStandardMaterial({ color: '#7a5233', roughness: 1 });
   const leafMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 });
-  const nRound = Math.floor(treeSpots.length * 0.55);
   const leafColors = ['#3f8f3a', '#4ca346', '#5cb84a', '#2f7a35', '#7cbf3f', '#3a7d44'];
   const pineColors = ['#2d6a4f', '#1b4332', '#40916c', '#2f5d3a'];
   const CHUNK = 110;
   const chunkMap = new Map();
-  treeSpots.forEach(([x, z], i) => {
-    const s = 0.8 + r() * 0.9;
+  treeSpots.forEach(([x, z, kind, scale]) => {
+    const s = scale * (0.9 + r() * 0.5);
     dummy.position.set(x, heightAt(x, z) - 0.1, z);
     dummy.rotation.set(0, r() * Math.PI * 2, 0);
     dummy.scale.set(s, s * (0.9 + r() * 0.3), s);
     dummy.updateMatrix();
-    const round = i < nRound;
+    const round = kind === 'round';
     const color = new THREE.Color(round ? leafColors[Math.floor(r() * leafColors.length)] : pineColors[Math.floor(r() * pineColors.length)]);
     const key = `${Math.floor(x / CHUNK)},${Math.floor(z / CHUNK)}`;
     if (!chunkMap.has(key)) chunkMap.set(key, []);
@@ -304,12 +319,13 @@ export function createEnvironment(engine) {
     let radius = 0;
     trees.forEach((t) => { radius = Math.max(radius, center.distanceTo(new THREE.Vector3().setFromMatrixPosition(t.m))); });
     // trees far from the city never fall inside the (view-fitted) shadow frustum
-    const nearCity = center.length() - radius < 120;
+    const nearCity = center.length() - radius < 200;
     meshes.forEach((m) => { m.castShadow = nearCity; });
     vegetation.push({ meshes, center, radius, low: false, visible: true });
   }
   const vegStats = { chunks: vegetation.length, visible: 0, low: 0 };
   let vegDist = 600;
+  let cityNear = 170;
   function updateVegetation(camPos) {
     let vis = 0, low = 0;
     for (const c of vegetation) {
@@ -328,44 +344,14 @@ export function createEnvironment(engine) {
     vegStats.low = low;
   }
 
-  // Bushes & flowers lining the city edge
+  // rocks scattered in the countryside
   const deco = new MeshBuilder();
-  for (let x = CITY_MIN_X - 4; x <= CITY_MAX_X + 4; x += 3.2) {
-    for (const z of [CITY_MIN_Z - 4.5, CITY_MAX_Z + 4]) {
-      deco.blob(0.9 + r() * 0.5, leafColors[Math.floor(r() * 6)], { x: x + r(), y: 0.5, z: z + r() - 0.5, sy: 0.8 }, 1);
-      if (r() < 0.5) deco.sphere(0.18, ['#ff6b9a', '#ffd43b', '#ffffff', '#b197fc'][Math.floor(r() * 4)], { x: x + 1.2, y: 0.3, z: z + 1.3 }, 6, 4);
-    }
-  }
-  for (let z = CITY_MIN_Z - 4; z <= CITY_MAX_Z + 4; z += 3.2) {
-    for (const x of [CITY_MIN_X - 4.5, CITY_MAX_X + 4.5]) {
-      deco.blob(0.9 + r() * 0.5, leafColors[Math.floor(r() * 6)], { x: x + r() - 0.5, y: 0.5, z: z + r(), sy: 0.8 }, 1);
-    }
-  }
-  // rocks
-  for (let i = 0; i < 60; i++) {
-    const a = r() * Math.PI * 2, d = CITY_HALF + 20 + r() * 150;
+  for (let i = 0; i < 70; i++) {
+    const a = r() * Math.PI * 2, d = R_WORLD + 10 + r() * 140;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
-    if (Math.hypot(x - POND.x, z - POND.z) < 24) continue;
     deco.blob(0.6 + r() * 1.4, ['#8d939b', '#a3a9b0', '#7b8189'][i % 3], { x, y: heightAt(x, z) + 0.2, z, sy: 0.6, ry: r() * 3 }, 1);
   }
-  // pond rim stones + reeds
-  for (let i = 0; i < 40; i++) {
-    const a = (i / 40) * Math.PI * 2;
-    deco.blob(0.5 + r() * 0.5, '#b0aaa0', { x: POND.x + Math.cos(a) * 21, y: 0, z: POND.z + Math.sin(a) * 15.5, sy: 0.5 });
-    if (i % 3 === 0) deco.cyl(0.05, 0.05, 1.6, '#5a8f3a', { x: POND.x + Math.cos(a) * 19, y: -0.3, z: POND.z + Math.sin(a) * 14 }, 4);
-  }
-  // wooden dock
-  deco.box(3, 0.2, 8, '#9c6b3f', { x: POND.x + 18, y: 0.3, z: POND.z, ry: Math.PI / 2 });
-  for (let i = 0; i < 4; i++) deco.cyl(0.15, 0.15, 1.2, '#6f4627', { x: POND.x + 21 - i * 2.4, y: -0.6, z: POND.z - 1.4 }, 6);
   root.add(deco.build());
-
-  // Pond water
-  const waterMat = new THREE.MeshStandardMaterial({ color: '#2f9fc7', roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.9 });
-  const water = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), waterMat);
-  water.scale.set(21, 1, 15.5);
-  water.position.set(POND.x, 0.05, POND.z);
-  water.receiveShadow = true;
-  root.add(water);
 
   // Distant mountains
   const mb = new MeshBuilder();
@@ -494,12 +480,13 @@ export function createEnvironment(engine) {
       cl.position.x += cl.userData.speed * dt;
       if (cl.position.x > 340) cl.position.x = -340;
     }
-    waterMat.color.setHSL(0.55, 0.6, 0.38 + Math.sin(time * 0.8) * 0.01);
+    train.rotation.y = -time * (13 / R_RAIL);
+    if (view && frame % 10 === 0) districts.update(view.camera, cityNear);
   }
 
   return {
     update, sun, setShadowQuality, vegStats,
-    setVegetationDistance(d) { vegDist = d; frame = 14; },
+    setVegetationDistance(d) { vegDist = d; cityNear = Math.min(260, Math.max(80, d * 0.32)); frame = 9; },
     setClouds(on) { clouds.forEach((c) => { c.visible = on; }); },
     get night() { return night; },
   };

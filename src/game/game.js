@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {
   CELL, GRID, PAD, PAD_Y, PLAY_HALF, SIDEWALK, STARTER_LOTS, landPrice, demolishCost, demolishTime, MAX_LEVEL, SAVE_KEY, BUSINESSES, BIZ, WORKERS, UPGRADES, LAW, CANTON, ZONES,
   ROBOT_UPKEEP, FIRST_NAMES, ROBOT_NAMES, DAYS, levelMult, slotsFor, buildCost, upgradeCost, hireCost,
-  trainingCost, buildTime, money,
+  trainingCost, buildTime, money, SHARE_BONUS, IPO_MIN, sharesFor, GOALS, GOLDEN_SECONDS, goalReward, MAX_PER_TYPE, sellValue,
 } from './config.js';
 import { buildBusiness, buildHQ, buildSign, buildForSale, easeOutBack, setBuildingLodScale, buildRuin } from '../models/buildings.js';
 import { buildConstructionSite, buildExcavator, buildRubble, bucketTip } from '../models/machines.js';
@@ -760,6 +760,13 @@ export class Game {
     this.stats = { deposits: 0, clicks: 0, golden: 0, playTime: 0, wagesPaid: 0, taxesPaid: 0, tvaPaid: 0 };
     this.tutorial = 0;
     this.milestone = 0;
+    this.shares = 0;           // actions SIX (prestige), permanent
+    this.lifetimeEarned = 0;   // CA cumulé toutes parties confondues
+    this.ipoCount = 0;
+    this.goalsDone = new Set();
+    this.goalsSeen = new Set();
+    this.earnRate = 0;         // moyenne glissante (~5 min) du revenu réellement encaissé, CHF/s
+    this.earnAcc = 0;
     this.tvaRegistered = false;
     this.week = emptyLedger();
     this.lastWeek = null;
@@ -851,7 +858,7 @@ export class Game {
 
   // ---------------- multipliers ----------------
   get incomeMult() {
-    let m = 1;
+    let m = 1 + SHARE_BONUS * this.shares;
     for (const u of UPGRADES) if (u.income && this.upgrades.has(u.id)) m *= u.income;
     return m;
   }
@@ -865,7 +872,17 @@ export class Game {
     for (const u of UPGRADES) if (u.work && this.upgrades.has(u.id)) m *= u.work;
     return m;
   }
-  get goldenMult() { return this.upgrades.has('golden') ? 3 : 1; }
+  get wageMult() {
+    let m = 1;
+    for (const u of UPGRADES) if (u.wage && this.upgrades.has(u.id)) m *= u.wage;
+    return m;
+  }
+  get upkeepRate() {
+    let m = ROBOT_UPKEEP;
+    for (const u of UPGRADES) if (u.upkeep && this.upgrades.has(u.id)) m *= u.upkeep;
+    return m;
+  }
+  get goldenMult() { return this.upgrades.has('golden') ? 2 : 1; }
   get rate() { return this.liveRateCache * (this.rush > 0 ? 2 : 1); }
   get nominalRate() { return this.rateCache; }
   get clickValue() { return Math.max(1, Math.round(1 + this.rateCache * 0.12)); }
@@ -886,7 +903,7 @@ export class Game {
   wage(w) {
     if (!w.human) return 0;
     const c = this.cantonData;
-    let h = w.building.biz.income * w.tier.wageMul * c.wageIdx;
+    let h = w.building.biz.income * w.tier.wageMul * c.wageIdx * this.wageMult;
     if (c.minWage && w.data.tier !== 'apprentice') h = Math.max(h, c.minWage);
     return h;
   }
@@ -963,6 +980,7 @@ export class Game {
       w.data.days++;
       if (w.data.tier === 'apprentice' && !w.data.cfc && w.data.days >= LAW.cfcDays) {
         w.data.cfc = true;
+        this.stats.cfc = (this.stats.cfc || 0) + 1;
         this.toast(`${w.data.name} a obtenu son CFC ! Tu peux l'engager comme employé·e.`, 'expert', 'gold');
         this.emit('change');
       }
@@ -1013,7 +1031,7 @@ export class Game {
   }
   cheapestBuild() {
     let m = Infinity;
-    for (const b of BUSINESSES) if (this.isUnlocked(BIZ[b.id])) m = Math.min(m, this.buildPrice(b.id) + this.permitFee(b.id));
+    for (const b of BUSINESSES) if (this.isUnlocked(BIZ[b.id]) && this.countType(b.id) < MAX_PER_TYPE) m = Math.min(m, this.buildPrice(b.id) + this.permitFee(b.id));
     return m;
   }
 
@@ -1031,6 +1049,57 @@ export class Game {
   earn(amount) {
     this.cash += amount;
     this.totalEarned += amount;
+    this.lifetimeEarned += amount;
+  }
+
+  // ---------------- objectives ----------------
+  goalState(goal) {
+    const [cur, target] = goal.check(this);
+    return { cur: Math.min(cur, target), target, ready: cur >= target, done: this.goalsDone.has(goal.id) };
+  }
+  /** The next objectives to show: unclaimed ones, in order. */
+  activeGoals(n = 4) { return GOALS.filter((g) => !this.goalsDone.has(g.id)).slice(0, n); }
+  claimGoal(id) {
+    const goal = GOALS.find((x) => x.id === id);
+    if (!goal || this.goalsDone.has(id) || !this.goalState(goal).ready) return false;
+    this.goalsDone.add(id);
+    const reward = goalReward(goal, this.earnRate);
+    this.cash += reward;
+    this.sound.golden();
+    this.toast(`Objectif réussi : ${goal.text} — prime de ${money(reward)}`, 'target', 'gold');
+    this.emit('change');
+    return true;
+  }
+  checkGoals() {
+    for (const goal of this.activeGoals(4)) {
+      if (this.goalsSeen.has(goal.id) || !this.goalState(goal).ready) continue;
+      this.goalsSeen.add(goal.id);
+      this.toast(`Objectif atteint : ${goal.text}. Réclame ta prime !`, 'target', 'success');
+      this.emit('goal');
+    }
+  }
+  get claimableGoals() { return this.activeGoals(4).filter((g) => this.goalState(g).ready).length; }
+
+  // ---------------- entrée en bourse (prestige) ----------------
+  get ipo() {
+    const total = sharesFor(this.lifetimeEarned);
+    const gain = Math.max(0, total - this.shares);
+    return { available: this.totalEarned >= IPO_MIN && gain >= 1, gain, total, need: IPO_MIN, bonus: SHARE_BONUS * this.shares, after: SHARE_BONUS * (this.shares + gain) };
+  }
+  /** Introduce the company on the SIX: sell everything for shares and restart the city. */
+  goPublic() {
+    const ipo = this.ipo;
+    if (!ipo.available) return false;
+    const data = this.serialize();
+    Object.assign(data, {
+      cash: 60, totalEarned: 0, upgrades: [], tvaRegistered: false, week: emptyLedger(), lastWeek: null,
+      pending: { wages: 0, charges: 0 }, owned: [], cleared: [], demolishing: {}, buildings: [],
+      shares: this.shares + ipo.gain, ipoCount: this.ipoCount + 1, tutorial: 5, savedAt: Date.now(), ipoJustDone: ipo.gain,
+    });
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { return false; }
+    this.resetting = true;
+    location.reload();
+    return true;
   }
 
   // ---------------- actions ----------------
@@ -1039,6 +1108,10 @@ export class Game {
     const biz = BIZ[typeId];
     if (!free) {
       if (!plot.owned || plot.ruin || !this.isUnlocked(biz) || !biz.zones.includes(plot.zone)) return false;
+      if (this.countType(typeId) >= MAX_PER_TYPE) {
+        this.toast(`La COMCO s'y oppose : pas plus de ${MAX_PER_TYPE} ${biz.name.toLowerCase()}s (loi sur les cartels)`, 'scale', 'error');
+        return false;
+      }
       const price = this.buildPrice(typeId), fee = this.permitFee(typeId);
       if (!this.spend(price + fee)) return false;
       this.week.fees += fee;
@@ -1095,6 +1168,7 @@ export class Game {
     disposeObject(d.exc.group);
     disposeObject(d.rubble);
     plot.demolish = null;
+    this.stats.demolished = (this.stats.demolished || 0) + 1;
     plot.removeRuin();
     plot.setOccupied(false);
     this.fx.dust(_v.set(plot.center.x, 0.3, plot.center.z), 22);
@@ -1115,6 +1189,30 @@ export class Game {
     this.toast(`${b.biz.name} ouvre ses portes !`, b.typeId, 'success');
     if (this.tutorial === 1) this.setTutorial(2);
     this.emit('change');
+  }
+
+  /** Sell a business: the plot stays yours, the staff moves with the business (art. 333 CO). */
+  sellBuilding(b) {
+    if (!b || !b.open) return false;
+    const value = sellValue(b.biz, b.level);
+    for (const w of [...b.workers]) {
+      w.dispose();
+      this.workers.splice(this.workers.indexOf(w), 1);
+    }
+    b.workers.length = 0;
+    b.dispose();
+    this.buildings.delete(b.plot.key);
+    b.plot.building = null;
+    b.plot.setOccupied(false);
+    this.cash += value;
+    if (this.selected === b) this.select(null);
+    this.fx.dust(b.plot.center.clone(), 18);
+    this.sound.buy();
+    this.toast(`${b.biz.name} revendu pour ${money(value)} — l'équipe suit le repreneur (art. 333 CO)`, 'contract', 'success');
+    this.computeRate();
+    this.cheapestCache = this.cheapestBuild();
+    this.emit('change');
+    return true;
   }
 
   upgrade(b) {
@@ -1252,11 +1350,12 @@ export class Game {
 
   deposit(w) {
     const gross = w.carry * (this.rush > 0 ? 2 : 1);
+    this.earnAcc += gross;
     this.earn(gross);
     this.recordSale(gross, w.building.biz.tva);
     let net = gross;
     if (!w.human) {
-      const upkeep = gross * ROBOT_UPKEEP;
+      const upkeep = gross * this.upkeepRate;
       this.cash -= upkeep;
       this.week.robots += upkeep;
       net -= upkeep;
@@ -1361,7 +1460,7 @@ export class Game {
 
   collectGolden() {
     if (!this.golden) return;
-    const reward = Math.max(60, this.rateCache * 50 + Math.max(0, this.cash) * 0.05) * this.goldenMult;
+    const reward = Math.max(25, this.earnRate * GOLDEN_SECONDS) * this.goldenMult;
     this.earn(reward);
     this.recordSale(reward, 'normal');
     this.stats.golden++;
@@ -1538,10 +1637,19 @@ export class Game {
       }
     }
 
+    // measured income: exponential moving average over ~5 minutes
+    this.earnTimer = (this.earnTimer || 0) + dt;
+    if (this.earnTimer >= 1) {
+      const k = Math.min(1, this.earnTimer / 300);
+      this.earnRate += (this.earnAcc / this.earnTimer - this.earnRate) * k;
+      this.earnAcc = 0;
+      this.earnTimer = 0;
+    }
     if (this.frame % 30 === 0) {
       this.computeRate();
       this.cheapestCache = this.cheapestBuild();
       this.checkMilestones();
+      this.checkGoals();
     }
     if (this.frame % 4 === 0) this.updateHover();
   }
@@ -1568,8 +1676,8 @@ export class Game {
   }
 
   checkMilestones() {
-    const steps = [1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12];
-    while (this.milestone < steps.length && this.totalEarned >= steps[this.milestone]) {
+    const steps = [1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18];
+    while (this.milestone < steps.length && this.lifetimeEarned >= steps[this.milestone]) {
       this.toast(`Cap franchi : ${money(steps[this.milestone])} de chiffre d'affaires cumulé !`, 'trophy', 'gold');
       this.milestone++;
     }
@@ -1597,8 +1705,13 @@ export class Game {
   // ---------------- persistence ----------------
   serialize() {
     return {
-      v: 2,
+      v: 3,
       canton: this.canton,
+      shares: this.shares,
+      lifetimeEarned: this.lifetimeEarned,
+      ipoCount: this.ipoCount,
+      goals: [...this.goalsDone],
+      earnRate: this.earnRate,
       cash: this.cash,
       totalEarned: this.totalEarned,
       upgrades: [...this.upgrades],
@@ -1632,7 +1745,14 @@ export class Game {
   load() {
     let data = null;
     try { data = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (e) { data = null; }
-    if (!data || data.v !== 2) { this.cheapestCache = this.cheapestBuild(); return null; }
+    if (!data || data.v !== 3) { this.cheapestCache = this.cheapestBuild(); return null; }
+    this.shares = data.shares || 0;
+    this.lifetimeEarned = data.lifetimeEarned ?? data.totalEarned ?? 0;
+    this.ipoCount = data.ipoCount || 0;
+    this.goalsDone = new Set(data.goals || []);
+    this.goalsSeen = new Set(this.goalsDone);
+    this.ipoJustDone = data.ipoJustDone || 0;
+    this.earnRate = data.earnRate || 0;
     this.canton = data.canton;
     this.cash = data.cash;
     this.totalEarned = data.totalEarned;
@@ -1675,7 +1795,7 @@ export class Game {
         for (const w of b.workers) {
           const cycle = w.workTime() + (2 * b.routeLength + 10) / (w.tier.speed * this.speedMult) + 0.7;
           const r = b.tripIncome(w.tier) / cycle;
-          if (w.human) human += r * 0.3 * 0.6; else robot += r * (1 - ROBOT_UPKEEP);
+          if (w.human) human += r * 0.3 * 0.6; else robot += r * (1 - this.upkeepRate);
         }
       }
       offline = (human + robot) * (1 - this.cantonData.tax) * Math.min(elapsed, 4 * 3600) * 0.5;
