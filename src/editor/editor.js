@@ -34,6 +34,7 @@ export class MapEditor {
     if (!this.el) this.build();
     const s = loadSpec();
     this.spec = { v: 1, roads: JSON.parse(JSON.stringify(s.roads)), specials: JSON.parse(JSON.stringify(s.specials || [])) };
+    this.extra = { objects: s.objects || [], auto: s.auto !== false }; // hand-placed 3D objects are kept as they are
     this.zones = decodeZones(s.zones);
     this.undoStack = [];
     this.cur = null;
@@ -332,6 +333,14 @@ export class MapEditor {
     // lines
     const all = this.cur ? [...this.spec.roads, this.cur] : this.spec.roads;
     for (const road of ['path', 'rail', 'sec', 'main', 'hwy'].flatMap((t) => all.filter((r) => r.type === t))) this.drawLine(road, road === this.cur);
+    // objects placed in the 3D editor (shown, not editable here)
+    for (const o of this.extra.objects) {
+      const [x, y] = this.toScreen(o.x, o.z);
+      if (x < -20 || y < -20 || x > this.W + 20 || y > this.H + 20) continue;
+      if (o.k === 'tree' || o.k === 'pine') { g.fillStyle = o.k === 'pine' ? '#1f5a3a' : '#2f8a3e'; g.fillRect(x - 1.5, y - 1.5, 3, 3); continue; }
+      const w = (o.w || 8) * (o.s || 1) * s, d = (o.d || 8) * (o.s || 1) * s;
+      g.save(); g.translate(x, y); g.rotate(-(o.ry || 0)); g.fillStyle = 'rgba(248,244,236,0.85)'; g.fillRect(-w / 2, -d / 2, w, d); g.restore();
+    }
     // landmarks
     for (const sp of this.spec.specials) this.drawSpecial(sp);
     // cursor preview
@@ -467,12 +476,12 @@ export class MapEditor {
     else if (a === 'clear') {
       if (!confirm('Effacer toute la carte (zones, routes et monuments) ?')) return;
       this.pushUndo();
-      this.spec.roads = []; this.spec.specials = []; this.zones = emptyZones();
+      this.spec.roads = []; this.spec.specials = []; this.zones = emptyZones(); this.extra = { objects: [], auto: false };
     } else if (a === 'default') {
       if (!confirm('Remplacer par la carte par défaut ?')) return;
       this.pushUndo();
       const d = defaultSpec();
-      this.spec.roads = d.roads; this.spec.specials = d.specials; this.zones = decodeZones(d.zones);
+      this.spec.roads = d.roads; this.spec.specials = d.specials; this.zones = decodeZones(d.zones); this.extra = { objects: [], auto: true };
     } else if (a === 'export') this.exportJSON();
     else if (a === 'import') {
       const f = this.el.querySelector('#ed-file');
@@ -496,7 +505,7 @@ export class MapEditor {
   }
 
   currentSpec() {
-    return { v: 1, zones: encodeZones(this.zones), roads: this.spec.roads, specials: this.spec.specials };
+    return { v: 1, zones: encodeZones(this.zones), roads: this.spec.roads, specials: this.spec.specials, objects: this.extra.objects, auto: this.extra.auto };
   }
 
   exportJSON() {
@@ -518,6 +527,7 @@ export class MapEditor {
         this.spec.roads = d.roads.filter((r) => LINE_TYPES[r.type] && Array.isArray(r.pts));
         this.spec.specials = (d.specials || []).filter((s) => SPECIALS[s.kind]);
         this.zones = decodeZones(d.zones);
+        this.extra = { objects: Array.isArray(d.objects) ? d.objects : [], auto: d.auto !== false };
         this.renderPanel();
         this.draw();
       } catch (err) {

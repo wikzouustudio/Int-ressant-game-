@@ -49,6 +49,22 @@ export const SPECIALS = {
   fountain: { name: 'Fontaine', w: 22, d: 22 },
 };
 
+/** Everything the 3D editor can place: kind → footprint (w × d m) and category. */
+export const CATALOG = [
+  { cat: 'Bâtiments', items: [
+    ['oldtown', 'Maison de vieille ville', 8, 10], ['cafe', 'Café-terrasse', 9, 9], ['shoprow', 'Boutiques', 18, 11],
+    ['apartment', 'Immeuble', 19, 13], ['rowhouse', 'Maisons mitoyennes', 17, 12], ['chalet', 'Chalet', 12, 14],
+    ['villa', 'Villa avec piscine', 14, 15], ['tower', 'Tour de bureaux', 15, 15], ['office', 'Bureaux', 20, 13],
+    ['bigbox', 'Grande surface', 30, 34], ['gas', 'Station-service', 16, 14], ['warehouse', 'Entrepôt', 28, 20],
+    ['factory', 'Usine', 25, 20], ['silo', 'Silos', 13, 12], ['yard', 'Dépôt de conteneurs', 22, 16], ['barn', 'Grange', 14, 11],
+  ] },
+  { cat: 'Monuments', items: Object.entries(SPECIALS).map(([k, v]) => [k, v.name, v.w, v.d]).concat([['plaza', 'Petite place', 14, 12]]) },
+  { cat: 'Nature', items: [['tree', 'Arbre feuillu', 3, 3], ['pine', 'Sapin', 3, 3], ['grove', 'Bosquet (8 arbres)', 14, 14], ['bush', 'Buisson', 2, 2], ['rock', 'Rocher', 2.5, 2.5], ['hedgerow', 'Haie', 6, 1]] },
+  { cat: 'Mobilier', items: [['lamp', 'Lampadaire', 1, 1], ['bench', 'Banc', 2, 1], ['car', 'Voiture garée', 2, 4], ['flowers', 'Bac à fleurs', 3, 1.5], ['busstop', 'Arrêt de bus', 3, 1.2], ['kiosk', 'Kiosque', 3.4, 3]] },
+];
+export const CATALOG_ITEM = Object.fromEntries(CATALOG.flatMap((c) => c.items.map(([k, name, w, d]) => [k, { kind: k, name, w, d, cat: c.cat }])));
+export const isTreeKind = (k) => k === 'tree' || k === 'pine';
+
 // ---------------------------------------------------------------------------
 // Zone grid helpers
 // ---------------------------------------------------------------------------
@@ -170,7 +186,12 @@ export function defaultSpec() {
     { kind: 'farmhouse', x: -235, z: 230, ry: 0 },
     { kind: 'playground', x: 255, z: -132, ry: 0 },
   ];
-  return { v: 1, zones: encodeZones(z), roads, specials };
+  return { v: 1, zones: encodeZones(z), roads, specials, objects: [], auto: true };
+}
+
+/** A blank world: grass only, nothing generated. */
+export function emptySpec() {
+  return { v: 1, zones: encodeZones(emptyZones()), roads: [], specials: [], objects: [], auto: false };
 }
 
 export function loadSpec() {

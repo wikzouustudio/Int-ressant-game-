@@ -433,10 +433,63 @@ const MODELS = {
   },
 };
 
+// ---------------- small objects for the map editor ----------------
+Object.assign(MODELS, {
+  bush(b, r) {
+    const c = pick(r, ['#4ca346', '#3f8f45', '#5cb84a', '#6aa84f']);
+    b.blob(0.9, c, { y: 0.6, sy: 0.8 }, 1);
+    b.blob(0.6, shade(c, 1.12), { x: 0.6, y: 0.45, z: 0.2, sy: 0.8 }, 1);
+    if (r() < 0.5) for (let k = 0; k < 4; k++) b.sphere(0.1, pick(r, ['#ff6b9a', '#ffd43b', '#ffffff']), { x: Math.cos(k * 1.6) * 0.7, y: 1.0, z: Math.sin(k * 1.6) * 0.7 }, 6, 4);
+  },
+  rock(b, r) {
+    b.blob(1.1, pick(r, ['#8d939b', '#a3a9b0', '#7b8189']), { y: 0.4, sy: 0.6, ry: r() * 3 }, 1);
+    b.blob(0.6, '#9aa0a8', { x: 0.9, y: 0.2, z: 0.3, sy: 0.6 }, 1);
+  },
+  bench(b) { bench(b, {}); },
+  lamp(b) {
+    b.cyl(0.22, 0.3, 0.4, '#2b2f36', { mat: 'metal' }, 8);
+    b.cyl(0.08, 0.11, 4.6, '#2b2f36', { mat: 'metal' }, 8);
+    b.box(1.1, 0.08, 0.08, '#2b2f36', { x: -0.5, y: 4.55, mat: 'metal', sharp: true });
+    b.cyl(0.25, 0.35, 0.3, '#2b2f36', { x: -1.0, y: 4.35, mat: 'metal' }, 8);
+    b.sphere(0.24, '#fff0c8', { x: -1.0, y: 4.3, mat: 'lit' }, 8, 6);
+  },
+  car(b, r) { car(b, 0, 0, Math.PI / 2, pick(r, CAR_COLS)); },
+  flowers(b, r) {
+    b.box(3, 0.4, 1.4, '#b9ad98', { r: 0.12 });
+    b.box(2.8, 0.06, 1.2, '#5b3a1e', { y: 0.36, sharp: true });
+    for (let k = 0; k < 7; k++) b.blob(0.26, pick(r, ['#ff6b9a', '#ffd43b', '#ffffff', '#b197fc', '#ff922b']), { x: -1.2 + k * 0.4, y: 0.5, z: (k % 2) * 0.3 - 0.15 }, 1);
+  },
+  busstop(b) {
+    b.box(2.6, 0.1, 0.9, '#5f6875', { y: 2.3, r: 0.04 });
+    for (const x of [-1.2, 1.2]) b.box(0.08, 2.3, 0.08, '#5f6875', { x, z: -0.35, sharp: true });
+    b.box(2.4, 1.6, 0.04, '#cfe6ef', { y: 0.5, z: -0.4, mat: 'glass', sharp: true });
+    b.box(1.6, 0.1, 0.3, '#c98a4b', { y: 0.45, z: -0.15, r: 0.03 });
+    b.box(0.6, 0.6, 0.06, '#f2c14e', { x: 1.0, y: 2.45, z: -0.4, mat: 'lit', sharp: true });
+  },
+  hedgerow(b) { b.box(6, 1.0, 0.8, '#3f8f45', { r: 0.3 }); },
+  kiosk(b, r) {
+    const c = pick(r, ACC);
+    b.box(3, 2.4, 2.4, '#fbf7ef', { r: 0.15 });
+    b.box(2.4, 1.0, 0.1, '#bfe3ff', { y: 0.9, z: 1.22, mat: 'lit', sharp: true });
+    awning(b, { y: 2.2, z: 1.2, w: 3.2, depth: 0.9, colors: ['#ffffff', c] });
+    b.box(3.3, 0.3, 2.7, c, { y: 2.4, r: 0.1 });
+  },
+});
+
 function drawLot(b, lot) {
   const r = rng(lot.seed);
-  b.group({ x: lot.x, z: lot.z, ry: lot.ry }, () => MODELS[lot.kind](b, r, lot.w, lot.d));
+  b.group({ x: lot.x, z: lot.z, ry: lot.ry, s: lot.s || 1 }, () => MODELS[lot.kind](b, r, lot.w, lot.d));
 }
+
+/** One object as its own mesh group (map editor preview), centred on the origin. */
+export function buildObjectModel(obj, lod = 2) {
+  const b = new MeshBuilder({ lod, uv: false });
+  drawLot(b, { ...obj, x: 0, z: 0, ry: 0 });
+  const g = b.build();
+  g.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.geometry.computeBoundingBox(); } });
+  return g;
+}
+export const hasModel = (kind) => !!MODELS[kind];
 
 /**
  * All district buildings, merged per 110 m chunk with two levels of detail

@@ -33,7 +33,15 @@ Le centre constructible (7×7 parcelles) est entouré d'une ville carrée : boul
 contournement, avenues, voie ferrée avec un train, et des quartiers (vieille ville piétonne, affaires,
 commerces, industrie, habitations) séparés par des zones sans routes (parcs, lacs, forêt, champs).
 
-Le bouton **carte** en haut à droite ouvre l'**éditeur de carte** (vue de dessus) :
+Le bouton **carte** en haut à droite ouvre l'**éditeur 3D**, directement dans la ville :
+- **Placer** : 30 bâtiments et monuments, arbres, bosquets, buissons, rochers, haies, lampadaires, bancs,
+  voitures, bacs à fleurs, arrêts de bus, kiosques (rotation Q / E).
+- **Sélection** : glisse un objet pour le déplacer, pivote-le, agrandis-le, varie son modèle, duplique-le ou supprime-le.
+- **Routes** (avenues, rues, autoroute, chemins, voie ferrée), **Sol** (pavés, eau, champs, zones), **Gomme**, annuler.
+- **Monde vide** pour tout refaire de zéro, ou **Rendre la ville actuelle modifiable** pour retoucher chaque
+  bâtiment et chaque arbre de la ville générée. Le **remplissage automatique** peut être activé ou coupé.
+
+L'éditeur offre aussi une **vue plan 2D** :
 - **Zones** : peins piéton, affaires, commerces, industrie, habitations, parc, forêt, agricole ou eau (grille de 10 m).
 - **Routes** : avenue, rue, autoroute, chemin piéton, voie ferrée — tracés droits ou courbes, aimantés aux routes existantes.
 - **Monuments** : église, gare, centre commercial, parking, stade, centrale, ferme, place de jeux, fontaine.

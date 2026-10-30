@@ -545,7 +545,8 @@ export class UI {
       </div>
       <div class="section-title">Sauvegarde</div>
       <div class="settings-row">
-        <button class="btn" data-action="map-editor">${icon('map', 'inline')} Éditeur de carte</button>
+        <button class="btn" data-action="map-editor3d">${icon('crane', 'inline')} Éditeur 3D</button>
+        <button class="btn" data-action="map-editor">${icon('map', 'inline')} Plan 2D</button>
         <button class="btn" data-action="save">${icon('check', 'inline')} Sauvegarder</button>
         <button class="btn danger" data-action="reset">${icon('warning', 'inline')} Recommencer à zéro</button>
       </div>`, 'settings');
@@ -579,6 +580,7 @@ export class UI {
     else if (a === 'q-perf') { this.overlay.toggle(!this.overlay.enabled); this.openSettings(); }
     else if (a === 'save') { g.save(); this.toast('Partie sauvegardée', 'check', 'success'); }
     else if (a === 'map-editor') { this.closeModal(); this.editor?.show(); }
+    else if (a === 'map-editor3d') { this.closeModal(); this.editor3d?.open(); }
     else if (a === 'reset') {
       if (confirm('Effacer ta progression et recommencer à zéro ?')) g.reset();
     }

@@ -8,6 +8,7 @@ import { UI } from './ui/ui.js';
 import { icon } from './ui/icons.js';
 import * as CFG from './game/config.js';
 import { MapEditor } from './editor/editor.js';
+import { MapEditor3D } from './editor/editor3d.js';
 
 document.querySelectorAll('[data-icon]').forEach((el) => { el.innerHTML = icon(el.dataset.icon); });
 
@@ -49,9 +50,14 @@ async function boot() {
   const ui = new UI(game, engine);
   const editor = new MapEditor();
   editor.onApply = () => { game.save(); game.resetting = true; location.reload(); };
+  const editor3d = new MapEditor3D(game, env, engine);
+  editor3d.onApply = editor.onApply;
+  editor3d.onPlan = () => editor.show();
   ui.editor = editor;
+  ui.editor3d = editor3d;
   window.__ed = editor;
-  document.getElementById('btn-map').onclick = () => { game.sound.click(); game.select(null); editor.show(); };
+  window.__ed3 = editor3d;
+  document.getElementById('btn-map').onclick = () => { game.sound.click(); editor3d.open(); };
   ui.quality = quality;
   await step(85);
   const result = game.load();
@@ -97,6 +103,7 @@ async function boot() {
     env.update(dt, game.tod, game.time, view);
     game.fx.update(dt);
     engine.update(dt);
+    editor3d.update();
     game.renderPrep();
     const t1 = performance.now();
     info.reset();

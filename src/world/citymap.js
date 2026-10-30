@@ -1,7 +1,7 @@
 import { rng } from '../models/builder.js';
 import { CELL, PLAY_HALF } from '../game/config.js';
 import {
-  WORLD_HALF, ZCELL, ZN, CORE_HALF, ZONES, SPECIALS, loadSpec, decodeZones, expandLine, linePts, curvePts,
+  WORLD_HALF, ZCELL, ZN, CORE_HALF, ZONES, SPECIALS, CATALOG_ITEM, isTreeKind, loadSpec, decodeZones, expandLine, linePts, curvePts,
 } from './mapspec.js';
 
 // City plan around the playable district. It comes from the map edited in the in-game
@@ -25,7 +25,8 @@ export const ROAD_TYPES = {
 export const ZONE_INFO = Object.fromEntries(ZONES.map((z) => [z.id || 'wild', z.name]));
 ZONE_INFO.core = 'Centre (terrains constructibles)';
 
-const SPEC = loadSpec();
+export const SPEC = loadSpec();
+const AUTO = SPEC.auto !== false;   // fill streets with buildings and plant trees automatically
 const GRIDZ = decodeZones(SPEC.zones);
 
 export function zoneAt(x, z) {
@@ -169,6 +170,16 @@ function generate() {
     for (let x = x0 - 1; x <= x0 + ZCELL + 1; x += OC) for (let z = z0 - 1; z <= z0 + ZCELL + 1; z += OC) { const c = cell(x, z); if (c >= 0) occ[c] = 3; }
   }
 
+  // --- objects placed by hand in the 3D editor
+  for (const o of SPEC.objects || []) {
+    if (isTreeKind(o.k)) { TREES.push([o.x, o.z, o.k === 'pine' ? 'pine' : 'round', o.s || 1]); markDisc(o.x, o.z, 1.2, 1); continue; }
+    const def = CATALOG_ITEM[o.k];
+    if (!def) continue;
+    const s = o.s || 1, w = (o.w || def.w), d = (o.d || def.d);
+    LOTS.push({ kind: o.k, x: o.x, z: o.z, ry: o.ry || 0, s, w, d, zone: zoneAt(o.x, o.z), seed: o.seed || 1 });
+    markRect(o.x, o.z, w * s, d * s, o.ry || 0, 2);
+  }
+
   // --- landmarks (placed before the generic lots)
   for (const sp of SPEC.specials || []) {
     const def = SPECIALS[sp.kind];
@@ -222,13 +233,15 @@ function generate() {
       carry = s - len;
     }
   };
-  for (const p of PATHS) placeAlong(p.closed ? [...p.pts, p.pts[0]] : p.pts, 2.6, { ped: true, only: 'ped' });
-  for (const rd of ROADS_NET) if (rd.type !== 'hwy') placeAlong(rd.closed ? [...rd.pts, rd.pts[0]] : rd.pts, rd.t.c + rd.t.sw);
-  // rows facing the playable district, along its edge roads
-  placeAlong(linePts(-CORE, CORE, CORE, CORE, 2), 3.6, { sides: [-1] });
-  placeAlong(linePts(CORE, -CORE, CORE, CORE, 2), 3.6, { sides: [-1] });
-  placeAlong(linePts(-CORE, CORE, -CORE, -CORE, 2), 3.6, { sides: [-1] });
-  placeAlong(linePts(-CORE, -CORE, CORE, -CORE, 2), 3.6, { sides: [1] });
+  if (AUTO) {
+    for (const p of PATHS) placeAlong(p.closed ? [...p.pts, p.pts[0]] : p.pts, 2.6, { ped: true, only: 'ped' });
+    for (const rd of ROADS_NET) if (rd.type !== 'hwy') placeAlong(rd.closed ? [...rd.pts, rd.pts[0]] : rd.pts, rd.t.c + rd.t.sw);
+    // rows facing the playable district, along its edge roads
+    placeAlong(linePts(-CORE, CORE, CORE, CORE, 2), 3.6, { sides: [-1] });
+    placeAlong(linePts(CORE, -CORE, CORE, CORE, 2), 3.6, { sides: [-1] });
+    placeAlong(linePts(-CORE, CORE, -CORE, -CORE, 2), 3.6, { sides: [-1] });
+    placeAlong(linePts(-CORE, -CORE, CORE, -CORE, 2), 3.6, { sides: [1] });
+  }
 
   // --- trees: forests, park groves, gardens and the countryside
   const rt = rng(99);
@@ -243,6 +256,7 @@ function generate() {
     const x = (rt() * 2 - 1) * SPAN, z = (rt() * 2 - 1) * SPAN;
     const zone = zoneAt(x, z);
     const out = Math.max(Math.abs(x), Math.abs(z)) - WORLD_HALF;
+    if (!AUTO && out <= 0) continue; // hand-made world: only the horizon forest is automatic
     const dens = zone === 'wild' ? (out > 0 ? (out < 70 ? 0.3 : 0.05) : 0.05)
       : ({ forest: 0.55, park: 0.14, farm: 0.02, res: 0.05, ind: 0.015, cbd: 0.015, shop: 0.02 }[zone] ?? 0);
     if (rt() > dens) continue;
@@ -250,7 +264,7 @@ function generate() {
     tree(x, z, pine ? 'pine' : 'round', 0.75 + rt() * 0.6);
   }
   // tree-lined footpaths (outside the paved old town)
-  for (const p of PATHS) {
+  for (const p of AUTO ? PATHS : []) {
     const pts = p.pts;
     for (let i = 1; i < pts.length - 1; i += 4) {
       const [x, z] = pts[i];

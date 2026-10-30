@@ -118,7 +118,10 @@ export class CityCamera {
           mode: e.button === 2 || e.button === 1 || e.ctrlKey || e.shiftKey ? 'rotate' : 'pan',
           sx: e.clientX, sy: e.clientY, t: performance.now(), moved: false, multi: false, lastT: performance.now(),
         };
+        // an editor tool may capture one-finger / left-button drags (painting, moving objects)
+        if (this.gesture.mode === 'pan' && this.dragTool && this.dragTool(this.ndc(e.clientX, e.clientY).clone(), 'start')) this.gesture.mode = 'tool';
       } else {
+        if (this.gesture?.mode === 'tool') this.dragTool?.(null, 'cancel');
         this.gesture.multi = true;
         this.gesture.mode = 'pinch';
         this.gesture.pinch = this.pinchState();
@@ -134,6 +137,7 @@ export class CityCamera {
       const px = p.x, py = p.y;
       p.x = e.clientX; p.y = e.clientY;
       if (Math.hypot(e.clientX - g.sx, e.clientY - g.sy) > (e.pointerType === 'mouse' ? 5 : 10)) g.moved = true;
+      if (g.mode === 'tool') { if (g.moved) this.dragTool?.(this.ndc(e.clientX, e.clientY).clone(), 'move'); return; }
       if (!g.moved && !g.multi) return;
       const now = performance.now();
       if (g.mode === 'pan' && this.pointers.size === 1) {
@@ -165,6 +169,11 @@ export class CityCamera {
       const g = this.gesture;
       if (!g) return;
       if (this.pointers.size === 0) {
+        if (g.mode === 'tool') {
+          this.dragTool?.(this.ndc(e.clientX, e.clientY).clone(), g.moved ? 'end' : 'tap');
+          this.gesture = null;
+          return;
+        }
         const quick = performance.now() - g.t < 450;
         if (!g.moved && !g.multi && quick && (p.button === 0 || e.pointerType !== 'mouse') && e.type === 'pointerup') {
           this.onTap?.(this.ndc(e.clientX, e.clientY).clone(), e.pointerType);

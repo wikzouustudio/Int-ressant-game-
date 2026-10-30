@@ -341,9 +341,15 @@ export function createEnvironment(engine) {
   }
   const vegStats = { chunks: vegetation.length, visible: 0, low: 0 };
   let vegDist = 600;
+  let cityHidden = false;
   let cityNear = 170;
   let treeNear = 160;
   function updateVegetation(camPos) {
+    if (cityHidden) {
+      for (const c of vegetation) { c.visible = false; c.meshes.forEach((m) => { m.visible = false; }); }
+      for (const c of lampChunks) { c.visible = false; c.lamp.visible = c.bulb.visible = c.pool.visible = false; }
+      return;
+    }
     let vis = 0, low = 0;
     for (const c of vegetation) {
       const d = Math.hypot(c.center.x - camPos.x, c.center.z - camPos.z) - c.radius;
@@ -512,6 +518,12 @@ export function createEnvironment(engine) {
 
   return {
     update, sun, setShadowQuality, vegStats,
+    /** Hide the generated city (the 3D map editor shows its own editable version). */
+    setCityVisible(on) {
+      cityHidden = !on;
+      network.group.visible = districts.group.visible = train.group.visible = on;
+      frame = 14;
+    },
     setVegetationDistance(d) { vegDist = d; cityNear = Math.min(260, Math.max(80, d * 0.32)); treeNear = Math.min(170, Math.max(70, d * 0.3)); frame = 9; },
     setClouds(on) { clouds.forEach((c) => { c.visible = on; }); },
     get night() { return night; },

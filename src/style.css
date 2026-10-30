@@ -717,3 +717,13 @@ button { font-family: inherit; color: inherit; cursor: pointer; border: none; }
   .ed-hint { left: 8px; right: 8px; bottom: auto; top: 8px; font-size: 12px; }
   .ed-tools { grid-template-columns: repeat(5, 1fr); }
 }
+
+/* 3D editor: panel over the live 3D view */
+#editor3d.hidden { display: none; }
+#editor3d .ed-panel { position: fixed; z-index: 30; }
+#editor3d .ed-swatches .ed-sw { font-size: 12px; }
+#editor3d .ed3-hint { position: fixed; z-index: 30; }
+body.editing #hud, body.editing #dock, body.editing #panel, body.editing #tutorial, body.editing #controls-hint, body.editing #toasts, body.editing #banner, body.editing #fx-layer { display: none !important; }
+@media (max-width: 760px) {
+  #editor3d .ed-panel { height: 44vh; }
+}

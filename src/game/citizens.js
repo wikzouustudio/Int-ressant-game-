@@ -195,7 +195,7 @@ export class Citizens {
       // 55 % of the walkers stroll in the old town and the parks, the rest in the district
       const focus = g.engine.controls.target;
       const nearCore = Math.abs(focus.x) < 110 && Math.abs(focus.z) < 110;
-      this.list.push(Math.random() < (nearCore ? 0.35 : 0.85) ? new Stroller(g.scene, focus) : new Citizen(g.scene));
+      this.list.push(PED.edges.length && Math.random() < (nearCore ? 0.35 : 0.85) ? new Stroller(g.scene, focus) : new Citizen(g.scene));
       this.alive++;
     }
     else if (this.alive > target) {

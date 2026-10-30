@@ -1492,6 +1492,7 @@ export class Game {
     this.mouse = new THREE.Vector2(9, 9);
     const cam = this.engine.controls.cam;
     cam.onTap = (ndc, type) => {
+      if (this.editor?.active) { this.editor.onTap(ndc, type); return; }
       this.mouse.copy(ndc);
       this.pointerType = type;
       this.handleClick();
@@ -1538,6 +1539,7 @@ export class Game {
 
   updateHover() {
     const cam = this.engine.controls.cam;
+    if (this.editor?.active) { this.hoverFrame.visible = false; return; }
     this.pointerType = cam.pointerType;
     if (this.engine.mobile || this.pointerType === 'touch' || cam.gesture) { this.hoverFrame.visible = false; this.emit('hover', null); return; }
     this.mouse.copy(cam.hover);
@@ -1656,7 +1658,8 @@ export class Game {
 
   /** Called right before rendering, after the camera moved. */
   renderPrep() {
-    this.crowd.update(this.camera, this.workers, this.citizens.list, this.crew, this.traffic.cars);
+    if (this.editor?.active) this.crowd.update(this.camera, this.workers, this.crew);
+    else this.crowd.update(this.camera, this.workers, this.citizens.list, this.crew, this.traffic.cars);
   }
 
   setLodScale(scale) {
