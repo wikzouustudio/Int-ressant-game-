@@ -1768,7 +1768,9 @@ function cineImpact(o,quip){if(!CINE.on)return;CINE.phase='hit';CINE.t=0;CINE.st
   m.rotation.x=-Math.PI/2;m.position.set(o.x,.02,o.z);m.scale.setScalar(.05);scene.add(m);RINGS.push({m,t:0});
   const m2=m.clone();m2.material=m.material.clone();m2.material.opacity=.6;scene.add(m2);RINGS.push({m:m2,t:-.08})}
 function cineScale(){if(!CINE.on)return 1;if(CINE.stop>0)return 0;const f=G.fever>0;
-  if(CINE.phase==='fall')return f?.65:.38;if(CINE.phase==='hit')return(f?.65:.38)+(1-(f?.65:.38))*sstep(.05,.45,CINE.t);return 1}
+  const lo=f?.4:.09;
+  if(CINE.phase==='fall'){const o=CINE.obj;const drop=o?clamp(1-o.y/TT,0,1):1;return 1-(1-lo)*sstep(.08,.62,drop)}
+  if(CINE.phase==='hit')return lo+(1-lo)*sstep(.1,.6,CINE.t);return 1}
 function cineUpdate(rdt){
   for(let i=RINGS.length-1;i>=0;i--){const r=RINGS[i];r.t+=rdt;if(r.t<0)continue;const k=r.t/.55;r.m.scale.setScalar(.05+1.6*Math.sqrt(k));r.m.material.opacity=Math.max(0,.9*(1-k));if(k>=1){scene.remove(r.m);r.m.geometry.dispose();r.m.material.dispose();RINGS.splice(i,1)}}
   if(CINE.on&&(G.state!=='play'||G.demo))CINE.on=0;
@@ -1779,7 +1781,7 @@ function cineUpdate(rdt){
   for(let i=GHOSTS.length-1;i>=0;i--){const g=GHOSTS[i];g.t+=rdt;const a=g.t<.05?0:Math.max(0,.18*(1-g.t/.4));g.g.traverse(n=>{if(n.isMesh)n.material.opacity=a});
     if(g.t>.4){scene.remove(g.g);g.g.traverse(n=>{if(n.isMesh)n.material.dispose()});GHOSTS.splice(i,1)}}
   if(CINE.on&&CINE.phase==='fall'&&CINE.obj&&CINE.obj.falling){const o=CINE.obj;CINE.focus.lerp(_v.set(o.x,Math.max(.25,o.y+o.hh/2),o.z),Math.min(1,rdt*12))}
-  if(CINE.on&&CINE.phase==='hit'&&CINE.t>.6){CINE.on=0;CINE.phase=''}
+  if(CINE.on&&CINE.phase==='hit'&&CINE.t>.7){CINE.on=0;CINE.phase=''}
   CINE.k+=((CINE.on?1:0)-CINE.k)*Math.min(1,rdt*(CINE.on?7:4));if(CINE.k<.002)CINE.k=0;
 }
 const _cp=new V3(),_cl=new V3();
