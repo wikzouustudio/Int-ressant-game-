@@ -1686,7 +1686,7 @@ function part(geo,mat,x,y,z,s,v,life,opt){
 function poof(x,y,z,n=14){for(let i=0;i<n;i++){const m=bmat(0xffffff,1,.9);
   part(ballG,m,x+rand(-.4,.4)*n/14,y+rand(-.6,.6)*n/14,z+rand(-.3,.3),rand(.12,.22)*(n<14?.5:1),[rand(-.8,.8),rand(.2,1),rand(-.5,.5)],rand(.4,.7),{own:true,g:0,floor:false,grow:1.5})}}
 // Optimisation : tous les débris au sol et toutes les flaques sont dessinés en une seule fois (instanciation)
-function mkInst(geo,n){const m=new THREE.InstancedMesh(geo,new THREE.MeshToonMaterial({gradientMap:GRAD}),n);m.count=0;m.frustumCulled=false;m.receiveShadow=true;m.setColorAt(0,new THREE.Color());scene.add(m);return{m,n,i:0}}
+function mkInst(geo,n){const m=new THREE.InstancedMesh(geo,new THREE.MeshToonMaterial({gradientMap:GRAD}),n);m.setColorAt(0,new THREE.Color());m.count=0;m.frustumCulled=false;m.receiveShadow=true;scene.add(m);return{m,n,i:0}}
 const DEBI={tetra:mkInst(tetraG,320),cube:mkInst(cubeG,160),disc:mkInst(discG,220)};const _o3=new THREE.Object3D(),_col=new THREE.Color();
 function instAdd(k,mat4,col){const d=DEBI[k];const i=d.i%d.n;d.m.setMatrixAt(i,mat4);d.m.setColorAt(i,col);d.i++;d.m.count=Math.min(d.i,d.n);d.m.instanceMatrix.needsUpdate=true;d.m.instanceColor.needsUpdate=true}
 function instClear(){for(const k in DEBI){DEBI[k].i=0;DEBI[k].m.count=0}}
@@ -1743,12 +1743,12 @@ function resize(){
   camera.aspect=W/H;camera.updateProjectionMatrix();
   UIK=clamp(Math.min(W/400,H/680),.75,1.4);
 }
-function portraitW(){return G&&G.state==='play'?4.45:4.8}
+function portraitW(){return G&&G.state==='play'?3.75:4.2}
 let CAMO=null;
 function updateCam(dt){
   camK+=((G.state==='play'?0:1)-camK)*Math.min(1,dt*3);
   const vf=camera.fov*Math.PI/180,hf=2*Math.atan(Math.tan(vf/2)*camera.aspect);
-  const dist=Math.max(portraitW()/2/Math.tan(hf/2),3.3/2/Math.tan(vf/2))*(1+camK*.06);
+  const dist=Math.max(portraitW()/2/Math.tan(hf/2),2.8/2/Math.tan(vf/2))*(1+camK*.06);
   const portrait=camera.aspect<1;
   camT.set(-.42,1.0+(portrait?.12:0)-camK*(portrait?.85:.35),-.3);
   camera.position.copy(camT).addScaledVector(camDir,dist);
@@ -1809,12 +1809,12 @@ function cineUpdate(rdt){
 }
 const _cp=new V3(),_cl=new V3();
 function cineCam(){const k=CINE.k;if(k<=0)return;const e=k*k*(3-2*k);
-  const sf=.5+.5*(CINE.sz||1),t=CINE.phase==='hit'?.9+CINE.t*.3:CINE.t,a=CINE.ang+t*.55,R=(2.05-Math.min(.5,t*.6)+(CINE.phase==='hit'?.15:0))*sf;
+  const sf=.5+.5*(CINE.sz||1),t=CINE.phase==='hit'?.9+CINE.t*.3:CINE.t,a=CINE.ang+t*.55,R=(1.6-Math.min(.45,t*.6)+(CINE.phase==='hit'?.1:0))*sf;
   _cp.set(CINE.focus.x+Math.sin(a)*R,CINE.focus.y+(.6+Math.min(.25,t*.18))*sf,CINE.focus.z+Math.cos(a)*R);
   if(shake){_cp.x+=rand(-1,1)*shake*.03;_cp.y+=rand(-1,1)*shake*.03}
   _cl.copy(camT).lerp(CINE.focus,e);camera.position.lerp(_cp,e);camera.lookAt(_cl);
   camera.rotateZ((CINE.phase==='hit'?-.06:.13*Math.sin(t*1.7+.6))*e*(CINE.mega?1.4:1));
-  camera.fov=36-6*e-9*CINE.punch*CINE.punch;camera.updateProjectionMatrix()}
+  camera.fov=36-9*e-10*CINE.punch*CINE.punch;camera.updateProjectionMatrix()}
 function cineOverlay(k){const c=CINE.k;if(c<=0)return;
   // étalonnage « film » : ombres bleutées, bords sombres
   c2.save();c2.globalCompositeOperation='multiply';c2.fillStyle=`rgba(120,150,210,${.22*c})`;c2.fillRect(0,0,W,H);c2.restore();
@@ -2149,7 +2149,7 @@ window.__minou={beam:()=>({vis:OW.beam.visible,op:OW.beamM.uniforms.op.value,pos
       holding=G.state==='play'&&bot(v,{O,G,cat});const lv=G.lives,st=O.st,ht=O.heat;update(1/60);if(G.lives<lv){const k=st+(ht>.9?'+bruit':'');log.caught[k]=(log.caught[k]||0)+1}
       log.t=t;if(G.state!=='play')break}
     log.breaks=G.breaks;log.waves=G.waves;log.score=G.score;log.state=G.state;return log},
-  start:()=>{closeSheet();menuEl.hidden=true;hudEl.hidden=false;resetRun(false)},test:()=>{const t={};for(const R of ROOMS)for(const o of R.objs){const t0=performance.now();const od=objData(o);buildPieces(od);t[o.m]=Math.round(performance.now()-t0)+'ms/'+od.parts.length+'p'}return t},clear:()=>{for(const o of G.line)scene.remove(o.piv);G.line=[];if(G.obj){scene.remove(G.obj.piv);G.obj=null}cat.mode='wait';cat.target=null;tableCleared()},cat:()=>cat,act:a=>nextAction(a),cam:v=>{CAMO=v},
+  start:()=>{closeSheet();menuEl.hidden=true;hudEl.hidden=false;resetRun(false)},test:()=>{const t={};for(const R of ROOMS)for(const o of R.objs){const t0=performance.now();const od=objData(o);buildPieces(od);t[o.m]=Math.round(performance.now()-t0)+'ms/'+od.parts.length+'p'}return t},clear:()=>{for(const o of G.line)scene.remove(o.piv);G.line=[];if(G.obj){scene.remove(G.obj.piv);G.obj=null}cat.mode='wait';cat.target=null;tableCleared()},cat:()=>cat,act:a=>nextAction(a),cam:v=>{CAMO=v},splat:(x,z,c,r)=>{splat(x,z,c,r);const m=DEBI.disc.m;return Array.from(m.instanceColor.array.slice(0,9)).join(",")+" n="+m.count},
   spawn:(i,x=-.2,z=ZP)=>{for(const d of DBG)scene.remove(d);DBG.length=0;const d=room().objs[i];const o={...d};Object.assign(o,instObj(o));o.piv.position.set(x,TT+o.hh/2,z);DBG.push(o.piv);return o.hh},
   jobs:()=>JOBT,stats:()=>({cat:CATS&&CATS.geo.attributes.position.count,human:HUMS&&HUMS.geo.attributes.position.count}),G:()=>G,O:()=>O,save};
 function boot(){
