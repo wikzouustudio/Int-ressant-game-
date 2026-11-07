@@ -1748,13 +1748,22 @@ function scr(x,y,z){_v.set(x,y,z).project(camera);return{x:(_v.x+1)/2*W,y:(1-_v.
 /* =================== CAMÉRA DE CASSE (ralenti cinématique) ===================
    L'objet bascule : ralenti, bandes cinéma, la caméra plonge et tourne autour de lui, lignes de vitesse,
    bandeau avec le nom et le prix. Impact : arrêt sur image, flash, onde de choc, texte en aberration chromatique. */
-const CINE={on:0,k:0,t:0,phase:'',stop:0,hit:0,obj:null,focus:new V3(),ang:0,name:'',price:'',quip:'',gold:0,combo:0,lines:[]};
+const CINE={on:0,k:0,t:0,phase:'',stop:0,hit:0,obj:null,focus:new V3(),ang:0,name:'',price:'',quip:'',gold:0,combo:0,lines:[],ghostT:0,punch:0,mega:0,cracks:[],shock:0,sp:{x:0,y:0},col:new THREE.Color()};
+const GHOSTS=[];const impactLight=new THREE.PointLight(0xffffff,0,7,1.5);scene.add(impactLight);
+function ghostOf(o){const g=o.piv.clone();g.traverse(n=>{if(n.isMesh){n.material=new THREE.MeshBasicMaterial({color:o.golden?0xffd23f:0x6fd3ff,transparent:true,opacity:.16,depthWrite:false,blending:THREE.AdditiveBlending});n.castShadow=false}});
+  g.position.copy(o.piv.position);g.quaternion.copy(o.piv.quaternion);scene.add(g);GHOSTS.push({g,t:0})}
 const RINGS=[];
 function cineStart(o){if(G.demo||G.state!=='play')return;
-  Object.assign(CINE,{on:1,phase:'fall',t:0,obj:o,ang:rand(.15,.6)*(Math.random()<.5?1:-1)+.25,name:o.e+'  '+o.n,price:fmt(o.eur*(o.golden?3:1))+' €',gold:o.golden?1:0,quip:''});
+  CINE.mega=(o.golden||o.eur>=1000||G.combo>=2)?1:0;Object.assign(CINE,{on:1,phase:'fall',t:0,ghostT:0,obj:o,ang:rand(.15,.6)*(Math.random()<.5?1:-1)+.25,name:o.e+'  '+o.n,price:fmt(o.eur*(o.golden?3:1))+' €',gold:o.golden?1:0,quip:''});
   CINE.focus.set(o.x,o.y+o.hh/2,o.z);sfx('slowmo')}
 function cineImpact(o,quip){if(!CINE.on)return;CINE.phase='hit';CINE.t=0;CINE.stop=G.fever>0?.04:.09;CINE.hit=1;CINE.quip=quip;CINE.combo=G.combo;
-  CINE.focus.set(o.x,.35,o.z);sfx('boom');
+  CINE.focus.set(o.x,.35,o.z);sfx('boom');if(CINE.mega)sfx('fever');
+  CINE.punch=1;CINE.shock=1;CINE.col.set(o.golden?'#ffd23f':o.c);impactLight.color.copy(CINE.col).lerp(new THREE.Color(1,1,1),.4);impactLight.position.set(o.x,.5,o.z+.3);impactLight.intensity=CINE.mega?7:4.5;
+  shake=Math.max(shake,CINE.mega?1.4:.9);
+  const p0=scr(o.x,.1,o.z);CINE.sp=p0;CINE.cracks=[];const nc=CINE.mega?11:7;
+  for(let i=0;i<nc;i++){const a=i/nc*6.283+rand(-.2,.2);const pts=[[0,0]];let r=0,aa=a;for(let j=0;j<5;j++){r+=rand(25,60);aa+=rand(-.35,.35);pts.push([Math.cos(aa)*r,Math.sin(aa)*r])}CINE.cracks.push(pts)}
+  for(let i=0;i<(CINE.mega?46:28);i++){const v=new V3(rand(-1,1),rand(.3,1.4),rand(-1,1)).normalize().multiplyScalar(rand(2.5,5.5));
+    part(cubeG,new THREE.MeshBasicMaterial({color:pick([0xffffff,0xffd23f,0xff8a3d,CINE.col.getHex()])}),o.x,.15,o.z,.022,[v.x,v.y,v.z],rand(.35,.8),{floor:false,own:true,g:5,sy:2.6})}
   const m=new THREE.Mesh(new THREE.RingGeometry(.7,1,48),new THREE.MeshBasicMaterial({color:o.golden?0xffd23f:0xffffff,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
   m.rotation.x=-Math.PI/2;m.position.set(o.x,.02,o.z);m.scale.setScalar(.05);scene.add(m);RINGS.push({m,t:0});
   const m2=m.clone();m2.material=m.material.clone();m2.material.opacity=.6;scene.add(m2);RINGS.push({m:m2,t:-.08})}
@@ -1764,7 +1773,11 @@ function cineUpdate(rdt){
   for(let i=RINGS.length-1;i>=0;i--){const r=RINGS[i];r.t+=rdt;if(r.t<0)continue;const k=r.t/.55;r.m.scale.setScalar(.05+1.6*Math.sqrt(k));r.m.material.opacity=Math.max(0,.9*(1-k));if(k>=1){scene.remove(r.m);r.m.geometry.dispose();r.m.material.dispose();RINGS.splice(i,1)}}
   if(CINE.on&&(G.state!=='play'||G.demo))CINE.on=0;
   if(CINE.stop>0)CINE.stop-=rdt;else CINE.t+=rdt;
-  CINE.hit=Math.max(0,CINE.hit-rdt*3);
+  CINE.hit=Math.max(0,CINE.hit-rdt*3);CINE.punch=Math.max(0,CINE.punch-rdt*3.2);CINE.shock=Math.max(0,CINE.shock-rdt*1.8);
+  impactLight.intensity=Math.max(0,impactLight.intensity-rdt*9);
+  if(CINE.on&&CINE.phase==='fall'&&CINE.obj&&CINE.obj.falling&&CINE.stop<=0){CINE.ghostT-=rdt;if(CINE.ghostT<=0&&GHOSTS.length<9){CINE.ghostT=.09;ghostOf(CINE.obj)}}
+  for(let i=GHOSTS.length-1;i>=0;i--){const g=GHOSTS[i];g.t+=rdt;const a=g.t<.05?0:Math.max(0,.18*(1-g.t/.4));g.g.traverse(n=>{if(n.isMesh)n.material.opacity=a});
+    if(g.t>.4){scene.remove(g.g);g.g.traverse(n=>{if(n.isMesh)n.material.dispose()});GHOSTS.splice(i,1)}}
   if(CINE.on&&CINE.phase==='fall'&&CINE.obj&&CINE.obj.falling){const o=CINE.obj;CINE.focus.lerp(_v.set(o.x,Math.max(.25,o.y+o.hh/2),o.z),Math.min(1,rdt*12))}
   if(CINE.on&&CINE.phase==='hit'&&CINE.t>.6){CINE.on=0;CINE.phase=''}
   CINE.k+=((CINE.on?1:0)-CINE.k)*Math.min(1,rdt*(CINE.on?7:4));if(CINE.k<.002)CINE.k=0;
@@ -1775,8 +1788,17 @@ function cineCam(){const k=CINE.k;if(k<=0)return;const e=k*k*(3-2*k);
   _cp.set(CINE.focus.x+Math.sin(a)*R,CINE.focus.y+.6+Math.min(.25,t*.18),CINE.focus.z+Math.cos(a)*R);
   if(shake){_cp.x+=rand(-1,1)*shake*.03;_cp.y+=rand(-1,1)*shake*.03}
   _cl.copy(camT).lerp(CINE.focus,e);camera.position.lerp(_cp,e);camera.lookAt(_cl);
-  camera.fov=36-6*e;camera.updateProjectionMatrix()}
+  camera.rotateZ((CINE.phase==='hit'?-.06:.13*Math.sin(t*1.7+.6))*e*(CINE.mega?1.4:1));
+  camera.fov=36-6*e-9*CINE.punch*CINE.punch;camera.updateProjectionMatrix()}
 function cineOverlay(k){const c=CINE.k;if(c<=0)return;
+  // étalonnage « film » : ombres bleutées, bords sombres
+  c2.save();c2.globalCompositeOperation='multiply';c2.fillStyle=`rgba(120,150,210,${.22*c})`;c2.fillRect(0,0,W,H);c2.restore();
+  const vg=c2.createRadialGradient(W/2,H/2,Math.min(W,H)*.3,W/2,H/2,Math.max(W,H)*.72);vg.addColorStop(0,'rgba(0,0,0,0)');vg.addColorStop(1,`rgba(10,0,25,${.55*c})`);c2.fillStyle=vg;c2.fillRect(0,0,W,H);
+  if(CINE.shock>0){const r=(1-CINE.shock)*Math.max(W,H)*.9,sp=CINE.sp;c2.save();c2.lineWidth=22*k*CINE.shock;c2.strokeStyle=`rgba(255,255,255,${.55*CINE.shock})`;c2.beginPath();c2.arc(sp.x,sp.y,r,0,7);c2.stroke();
+    c2.lineWidth=8*k*CINE.shock;c2.strokeStyle=CINE.mega?`hsla(${(T*400)%360},100%,65%,${.7*CINE.shock})`:`rgba(255,200,90,${.5*CINE.shock})`;c2.beginPath();c2.arc(sp.x,sp.y,r*.78,0,7);c2.stroke();c2.restore()}
+  if(CINE.phase==='hit'&&CINE.cracks.length){const a=Math.max(0,1-CINE.t/.55);if(a>0){c2.save();c2.translate(CINE.sp.x,CINE.sp.y);c2.lineJoin='round';
+    for(const pass of[[5*k,`rgba(20,0,30,${.55*a})`],[2*k,`rgba(255,255,255,${.95*a})`]]){c2.lineWidth=pass[0];c2.strokeStyle=pass[1];
+      for(const cr of CINE.cracks){c2.beginPath();cr.forEach((q,i)=>i?c2.lineTo(q[0]*k,q[1]*k):c2.moveTo(0,0));c2.stroke()}}c2.restore()}}
   // bandes noires
   const bh=H*.085*c;c2.fillStyle='#000';c2.fillRect(0,0,W,bh);c2.fillRect(0,H-bh,W,bh);
   const f=scr(CINE.focus.x,CINE.focus.y,CINE.focus.z);
@@ -1800,7 +1822,8 @@ function cineOverlay(k){const c=CINE.k;if(c<=0)return;
       c2.font=`${s}px ${FONT}`;c2.textAlign='center';c2.textBaseline='middle';c2.globalCompositeOperation='lighter';
       c2.fillStyle='rgba(255,40,90,.85)';c2.fillText(CINE.quip,-o,0);c2.fillStyle='rgba(40,220,255,.85)';c2.fillText(CINE.quip,o,0);
       c2.globalCompositeOperation='source-over';outlined(CINE.quip,0,0,s,'#ffffff');
-      if(CINE.combo>1)outlined('COMBO x'+CINE.combo,0,s*.75,s*.42,'#ffd23f');c2.restore()}}
+      if(CINE.combo>1)outlined('COMBO x'+CINE.combo,0,s*.75,s*.42,'#ffd23f');
+      if(CINE.mega)outlined('★ MÉGA CASSE ★',0,-s*.78,s*.36,`hsl(${(T*300)%360},100%,70%)`);c2.restore()}}
 }
 
 /* =================== CALQUE 2D (textes) =================== */
