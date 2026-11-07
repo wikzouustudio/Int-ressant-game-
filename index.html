@@ -1303,8 +1303,9 @@ function resetRun(demo){
 }
 function diff(){return G.demo?.15:Math.min(1,G.breaks/40)}
 function tutoSlow(){return!save.tuto&&G.breaks<3?1.7:1}
-function distractDur(){const d=diff();return(rand(.9,2.6)*(1-.4*d)*(1-.35*O.par)+.2)*tutoSlow()}
-function warnDur(){const d=diff();return(Math.max(.24,(.55-.25*d)*(1-.3*O.par))+save.up.ears*.06)*(tutoSlow()>1?1.4:1)}
+function diff2(){return G.demo?0:clamp((G.breaks-25)/35,0,1)} // au-delà de 40 casses, ça continue de se corser
+function distractDur(){const d=diff();return(rand(.9,2.6)*(1-.4*d)*(1-.35*O.par)*(1-.38*diff2())+.2)*tutoSlow()}
+function warnDur(){const d=diff();return(Math.max(.3,(.6-.25*d)*(1-.3*O.par))+save.up.ears*.06)*(tutoSlow()>1?1.4:1)}
 function lookDur(){return rand(.8,1.5)*(1+.5*O.par)}
 function parMult(){return 1+Math.round(O.par*10)/10}
 
@@ -1336,14 +1337,15 @@ function introduce(k){if(G.demo||save.seen[k])return false;save.seen[k]=1;persis
   introEl.querySelector('.ib-t').textContent=INTRO[k][0];introEl.querySelector('.ib-d').textContent=INTRO[k][1];introEl.hidden=false;introT=3.4;sfx('intro');return true}
 function dodged(){if(!G.demo&&G.state==='play'&&O.last!=='look'){G.dodges++;misProgress('dodge',G.dodges,true)}}
 function guard(){if(pushing&&!G.demo)caught()}
-function goTable(after,tx){O.after=after;O.path=[[ownerX,-.82],[tx,-.82]];O.riseT=.6*(O.first?1.6:1);ownerSet('rise',O.riseT)}
+function goTable(after,tx){O.after=after;O.path=[[ownerX,-.82],[tx,-.82]];O.riseT=.8*(O.first?1.6:1);ownerSet('rise',O.riseT)}
 function nextAction(force){
   const b=G.demo?0:G.breaks,d=diff();
   const opts=[['look',1]];
-  if(b>=4)opts.push(['glance',.45+.35*d]);
+  const d2=diff2();
+  if(b>=4)opts.push(['glance',.45+.35*d+.3*d2]);
   if(b>=6)opts.push(['call',.13]);
-  if(b>=8)opts.push(['listen',.4]);
-  if(b>=12)opts.push(['selfie',.32]);
+  if(b>=8)opts.push(['listen',.4+.2*d2]);
+  if(b>=12)opts.push(['selfie',.32+.2*d2]);
   if(b>=16&&G.obj&&cat.mode==='push')opts.push(['stand',.2+(G.obj.x>tableR-.5?.45:0)]);
   const pool=opts.filter(o=>o[0]==='look'||o[0]!==O.last);
   let tot=0;for(const o of pool)tot+=o[1];let r=Math.random()*tot,a='look';for(const o of pool){r-=o[1];if(r<=0){a=o[0];break}}
@@ -1352,7 +1354,7 @@ function nextAction(force){
   const f=O.first?1.8:1;
   switch(a){
     case 'look':startSuspicious(false);break;
-    case 'glance':ownerSet('glancePre',(Math.max(.26,(.42-.12*d)*(1-.25*O.par))+save.up.ears*.04)*f);sfx('tink');break;
+    case 'glance':ownerSet('glancePre',(Math.max(.32,(.46-.12*d)*(1-.2*O.par))+save.up.ears*.04)*f);sfx('tink');break;
     case 'listen':ownerSet('listen',rand(3,4.5));say(LINES.listen,1.6);sfx('hmm');break;
     case 'call':ownerSet('call',rand(3.5,5));say('Allô Mamie ? 📞',1.6);O.idleT=1.8;sfx('ring');break;
     case 'selfie':ownerSet('selfieUp',.7*f);say(LINES.selfie,1.4);break;
@@ -1378,7 +1380,7 @@ function ownerUpdate(dt){
         goTable('place',clamp(O.plan.reduce((s,p)=>s+p.x,0)/O.plan.length,-.6,.6));say(LINES.refill,1.8);break}
       O.idleT-=dt;if(O.idleT<=0&&O.bt<=0){if(!G.demo)say(LINES.idle,1.8);O.idleT=rand(4,8)}if(O.t<=0)nextAction();break;
     case 'suspicious':if(O.t<=0){if(O.feint){ownerSet('distracted',rand(.35,1));if(Math.random()<.5)say(LINES.feint,1.1)}else{ownerSet('looking',lookDur());if(!G.demo)sfx('look')}}break;
-    case 'looking':guard();if(O.st==='looking'&&O.t<=0){if(O.bt<=0&&!G.demo&&Math.random()<.4)say(LINES.innocent,1.3);ownerSet('distracted',Math.random()<.2+.2*diff()?rand(.3,.6):distractDur())}break;
+    case 'looking':guard();if(O.st==='looking'&&O.t<=0){if(O.bt<=0&&!G.demo&&Math.random()<.4)say(LINES.innocent,1.3);ownerSet('distracted',Math.random()<.2+.2*diff()+.25*diff2()?rand(.3,.6):distractDur())}break;
     case 'glancePre':if(O.t<=0){ownerSet('glance',rand(.45,.7));sfx('look')}break;
     case 'glance':guard();if(O.st==='glance'&&O.t<=0){ownerSet('distracted',distractDur());dodged()}break;
     case 'listen':if(O.t<=0){ownerSet('distracted',distractDur());dodged()}break;
@@ -1386,7 +1388,7 @@ function ownerUpdate(dt){
     case 'selfieUp':if(O.t<=0){O.cd=3;ownerSet('selfie',O.first?.8:.55);sfx('beep')}break;
     case 'selfie':if(O.t<=0){O.cd--;if(O.cd>0){O.t=O.first?.8:.55;sfx('beep')}else{ownerSet('flash',.35);G.white=1;sfx('shutter');if(pushing&&!G.demo){say(LINES.flash,1.5);caught()}}}break;
     case 'flash':guard();if(O.st==='flash'&&O.t<=0){ownerSet('distracted',distractDur()*.7);dodged()}break;
-    case 'rise':O.sf=Math.max(0,O.sf-dt/.6);O.faceT=0;if(O.t<O.riseT-.3)guard();if(O.st==='rise'&&O.t<=0){O.sf=0;ownerSet('walk',9)}break;
+    case 'rise':if(O.t<O.riseT-.2)O.sf=Math.max(0,O.sf-dt/.6);O.faceT=0;if(O.t<O.riseT-.45)guard();if(O.st==='rise'&&O.t<=0){O.sf=0;ownerSet('walk',9)}break;
     case 'walk':guard();if(O.st==='walk'&&walkPath(dt)){O.faceT=0;
       if(O.after==='place'){ownerSet('place',O.plan.length*.32+.4);say(LINES.placing,1.2)}else{ownerSet('inspect',1.25);say(LINES.touche,1.3)}}break;
     case 'inspect':guard();if(O.st!=='inspect')break;if(G.obj&&!G.obj.falling&&cat.mode==='push'&&O.t<1){G.obj.x+=(G.obj.sx-G.obj.x)*Math.min(1,dt*4)}
@@ -1401,7 +1403,7 @@ function ownerUpdate(dt){
 // pousser longtemps fait grincer l'objet : l'humain finit par entendre
 function heatUpdate(dt){
   const listen=O.st==='listen';
-  if(pushing&&G.fever<=0){O.heat+=dt*.5*(.7+.3*G.obj.w)*(1+.6*diff())*(listen?2.6:O.st==='call'?.4:1)}
+  if(pushing&&G.fever<=0){O.heat+=dt*.5*(.7+.3*G.obj.w)*(1+.6*diff()+.7*diff2())*(listen?2.6:O.st==='call'?.4:1)}
   else O.heat=Math.max(0,O.heat-dt*(listen?.7:1.1));
   if(O.away>=.5)return;
   if(O.st==='distracted'||listen||O.st==='call'){
@@ -1948,7 +1950,12 @@ function frame(now){
 }
 window.addEventListener('resize',resize);
 const DBG=[];
-window.__minou={test:()=>{const t={};for(const R of ROOMS)for(const o of R.objs){const t0=performance.now();const od=objData(o);buildPieces(od);t[o.m]=Math.round(performance.now()-t0)+'ms/'+od.parts.length+'p'}return t},clear:()=>{for(const o of G.line)scene.remove(o.piv);G.line=[];if(G.obj){scene.remove(G.obj.piv);G.obj=null}cat.mode='wait';cat.target=null;tableCleared()},cat:()=>cat,act:a=>nextAction(a),cam:v=>{CAMO=v},
+window.__minou={sim:(sec,bot,lat=.25)=>{const hist=[];const log={caught:{},breaks:0,t:0,waves:0};const oc=caught;
+    for(let t=0;t<sec;t+=1/60){hist.push({st:O.st,heat:O.heat,cd:O.cd,ot:O.t,away:O.away,mode:cat.mode,fever:G.fever});const v=hist.length>Math.round(lat*60)?hist.shift():hist[0];
+      holding=G.state==='play'&&bot(v,{O,G,cat});const lv=G.lives,st=O.st,ht=O.heat;update(1/60);if(G.lives<lv){const k=st+(ht>.9?'+bruit':'');log.caught[k]=(log.caught[k]||0)+1}
+      log.t=t;if(G.state!=='play')break}
+    log.breaks=G.breaks;log.waves=G.waves;log.score=G.score;log.state=G.state;return log},
+  start:()=>{closeSheet();menuEl.hidden=true;hudEl.hidden=false;resetRun(false)},test:()=>{const t={};for(const R of ROOMS)for(const o of R.objs){const t0=performance.now();const od=objData(o);buildPieces(od);t[o.m]=Math.round(performance.now()-t0)+'ms/'+od.parts.length+'p'}return t},clear:()=>{for(const o of G.line)scene.remove(o.piv);G.line=[];if(G.obj){scene.remove(G.obj.piv);G.obj=null}cat.mode='wait';cat.target=null;tableCleared()},cat:()=>cat,act:a=>nextAction(a),cam:v=>{CAMO=v},
   spawn:(i,x=-.2,z=ZP)=>{for(const d of DBG)scene.remove(d);DBG.length=0;const d=room().objs[i];const o={...d};Object.assign(o,instObj(o));o.piv.position.set(x,TT+o.hh/2,z);DBG.push(o.piv);return o.hh},
   jobs:()=>JOBT,stats:()=>({cat:CATS&&CATS.geo.attributes.position.count,human:HUMS&&HUMS.geo.attributes.position.count}),G:()=>G,O:()=>O,save};
 function boot(){
