@@ -483,6 +483,8 @@ function sfx(n,o){
      if(fx==='stone')tone('sine',90,40,.4,.5);
      break}
    case 'whoosh':noise(.22,.18,'bandpass',500,2200,0,2);break;
+   case 'slowmo':noise(.9,.22,'bandpass',1800,250,0,1.5);tone('sawtooth',220,70,.9,.06);break;
+   case 'boom':tone('sine',95,32,.6,.55);noise(.35,.4,'lowpass',900,80);break;
    case 'meow':{const t=AC.currentTime;const os=AC.createOscillator(),f=AC.createBiquadFilter(),g=AC.createGain();
      os.type='sawtooth';os.frequency.setValueAtTime(520,t);os.frequency.linearRampToValueAtTime(880,t+.12);os.frequency.linearRampToValueAtTime(480,t+.38);
      f.type='bandpass';f.frequency.setValueAtTime(900,t);f.frequency.linearRampToValueAtTime(1600,t+.15);f.frequency.linearRampToValueAtTime(700,t+.38);f.Q.value=3;
@@ -1584,7 +1586,7 @@ function updateObj(dt){
   }
   const wob=o.x>tableR-.12?Math.sin(T*38)*.12:0;
   o.piv.scale.setScalar(1);o.piv.position.set(o.x,o.y+o.hh/2,o.z);o.piv.rotation.z=wob;
-  if(o.x>tableR){o.falling=true;o.vx=.35+pushSpeed(o)*.25;o.vy=.9;o.vrz=-rand(4,8);o.vrx=rand(-3,3);sfx('whoosh')}
+  if(o.x>tableR){o.falling=true;o.vx=.35+pushSpeed(o)*.25;o.vy=.9;o.vrz=-rand(4,8);o.vrx=rand(-3,3);sfx('whoosh');cineStart(o)}
 }
 function easeBack(k){const c=1.7;return 1+(c+1)*Math.pow(k-1,3)+c*Math.pow(k-1,2)}
 function smash(o){
@@ -1614,7 +1616,7 @@ function smash(o){
     misProgress('damage',G.damage,true);misProgress('clean',G.clean,true);
     updHUD();
   }
-  addPop(o.x+rand(-.2,.2),2.1,o.z,pick(QUIPS[o.fx]||QUIPS.shards),'#ffffff',30,.8,rand(-.25,.25));
+  const quip=pick(QUIPS[o.fx]||QUIPS.shards);if(CINE.on)cineImpact(o,quip);else addPop(o.x+rand(-.2,.2),2.1,o.z,quip,'#ffffff',30,.8,rand(-.25,.25));
   shake=Math.max(shake,.35+o.w*.25);
   sfx('crash',o.fx);
   burst(o);breakApart(o);
@@ -1737,9 +1739,69 @@ function updateCam(dt){
   camera.position.copy(camT).addScaledVector(camDir,dist);
   if(shake){camera.position.x+=rand(-1,1)*shake*.06;camera.position.y+=rand(-1,1)*shake*.06}
   camera.lookAt(camT);
+  cineCam();if(CINE.k<=0&&camera.fov!==36){camera.fov=36;camera.updateProjectionMatrix()}
   if(CAMO){camera.position.set(CAMO[0],CAMO[1],CAMO[2]);camera.lookAt(CAMO[3],CAMO[4],CAMO[5])}
 }
 function scr(x,y,z){_v.set(x,y,z).project(camera);return{x:(_v.x+1)/2*W,y:(1-_v.y)/2*H}}
+
+
+/* =================== CAMÉRA DE CASSE (ralenti cinématique) ===================
+   L'objet bascule : ralenti, bandes cinéma, la caméra plonge et tourne autour de lui, lignes de vitesse,
+   bandeau avec le nom et le prix. Impact : arrêt sur image, flash, onde de choc, texte en aberration chromatique. */
+const CINE={on:0,k:0,t:0,phase:'',stop:0,hit:0,obj:null,focus:new V3(),ang:0,name:'',price:'',quip:'',gold:0,combo:0,lines:[]};
+const RINGS=[];
+function cineStart(o){if(G.demo||G.state!=='play')return;
+  Object.assign(CINE,{on:1,phase:'fall',t:0,obj:o,ang:rand(.15,.6)*(Math.random()<.5?1:-1)+.25,name:o.e+'  '+o.n,price:fmt(o.eur*(o.golden?3:1))+' €',gold:o.golden?1:0,quip:''});
+  CINE.focus.set(o.x,o.y+o.hh/2,o.z);sfx('slowmo')}
+function cineImpact(o,quip){if(!CINE.on)return;CINE.phase='hit';CINE.t=0;CINE.stop=G.fever>0?.04:.09;CINE.hit=1;CINE.quip=quip;CINE.combo=G.combo;
+  CINE.focus.set(o.x,.35,o.z);sfx('boom');
+  const m=new THREE.Mesh(new THREE.RingGeometry(.7,1,48),new THREE.MeshBasicMaterial({color:o.golden?0xffd23f:0xffffff,transparent:true,opacity:.9,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
+  m.rotation.x=-Math.PI/2;m.position.set(o.x,.02,o.z);m.scale.setScalar(.05);scene.add(m);RINGS.push({m,t:0});
+  const m2=m.clone();m2.material=m.material.clone();m2.material.opacity=.6;scene.add(m2);RINGS.push({m:m2,t:-.08})}
+function cineScale(){if(!CINE.on)return 1;if(CINE.stop>0)return 0;const f=G.fever>0;
+  if(CINE.phase==='fall')return f?.65:.38;if(CINE.phase==='hit')return(f?.65:.38)+(1-(f?.65:.38))*sstep(.05,.45,CINE.t);return 1}
+function cineUpdate(rdt){
+  for(let i=RINGS.length-1;i>=0;i--){const r=RINGS[i];r.t+=rdt;if(r.t<0)continue;const k=r.t/.55;r.m.scale.setScalar(.05+1.6*Math.sqrt(k));r.m.material.opacity=Math.max(0,.9*(1-k));if(k>=1){scene.remove(r.m);r.m.geometry.dispose();r.m.material.dispose();RINGS.splice(i,1)}}
+  if(CINE.on&&(G.state!=='play'||G.demo))CINE.on=0;
+  if(CINE.stop>0)CINE.stop-=rdt;else CINE.t+=rdt;
+  CINE.hit=Math.max(0,CINE.hit-rdt*3);
+  if(CINE.on&&CINE.phase==='fall'&&CINE.obj&&CINE.obj.falling){const o=CINE.obj;CINE.focus.lerp(_v.set(o.x,Math.max(.25,o.y+o.hh/2),o.z),Math.min(1,rdt*12))}
+  if(CINE.on&&CINE.phase==='hit'&&CINE.t>.6){CINE.on=0;CINE.phase=''}
+  CINE.k+=((CINE.on?1:0)-CINE.k)*Math.min(1,rdt*(CINE.on?7:4));if(CINE.k<.002)CINE.k=0;
+}
+const _cp=new V3(),_cl=new V3();
+function cineCam(){const k=CINE.k;if(k<=0)return;const e=k*k*(3-2*k);
+  const t=CINE.phase==='hit'?.9+CINE.t*.3:CINE.t,a=CINE.ang+t*.55,R=2.05-Math.min(.5,t*.6)+(CINE.phase==='hit'?.15:0);
+  _cp.set(CINE.focus.x+Math.sin(a)*R,CINE.focus.y+.6+Math.min(.25,t*.18),CINE.focus.z+Math.cos(a)*R);
+  if(shake){_cp.x+=rand(-1,1)*shake*.03;_cp.y+=rand(-1,1)*shake*.03}
+  _cl.copy(camT).lerp(CINE.focus,e);camera.position.lerp(_cp,e);camera.lookAt(_cl);
+  camera.fov=36-6*e;camera.updateProjectionMatrix()}
+function cineOverlay(k){const c=CINE.k;if(c<=0)return;
+  // bandes noires
+  const bh=H*.085*c;c2.fillStyle='#000';c2.fillRect(0,0,W,bh);c2.fillRect(0,H-bh,W,bh);
+  const f=scr(CINE.focus.x,CINE.focus.y,CINE.focus.z);
+  // lignes de vitesse façon manga
+  if(CINE.phase==='fall'&&CINE.stop<=0){c2.save();c2.strokeStyle=`rgba(255,255,255,${.32*c})`;c2.lineCap='round';
+    for(let i=0;i<34;i++){const a=Math.random()*6.283,r0=Math.max(W,H)*(.28+Math.random()*.25),r1=r0+Math.max(W,H)*(.25+Math.random()*.4);
+      c2.lineWidth=1+Math.random()*3*k;c2.beginPath();c2.moveTo(f.x+Math.cos(a)*r0,f.y+Math.sin(a)*r0);c2.lineTo(f.x+Math.cos(a)*r1,f.y+Math.sin(a)*r1);c2.stroke()}c2.restore()}
+  // bandeau nom + prix
+  const slide=sstep(0,.25,CINE.phase==='fall'?CINE.t:1)*(CINE.on?1:c),bx=-320+(320+14*k)*slide,by=H-bh-70*k;
+  if(slide>.01){c2.save();c2.translate(bx,by);c2.transform(1,0,-.18,1,0,0);
+    c2.fillStyle=CINE.gold?'rgba(255,210,63,.95)':'rgba(36,18,47,.92)';rr(0,0,300*k,56*k,8*k);c2.fill();
+    c2.fillStyle='#ff8a3d';c2.fillRect(0,0,7*k,56*k);
+    c2.textAlign='left';c2.textBaseline='middle';c2.font=`${17*k}px ${FONT}`;c2.fillStyle=CINE.gold?'#3a2300':'#fff4e3';
+    c2.fillText(CINE.name.length>26?CINE.name.slice(0,25)+'…':CINE.name,18*k,19*k);
+    c2.font=`${20*k}px ${FONT}`;c2.fillStyle=CINE.gold?'#7a3b00':'#ffd23f';c2.fillText('💸 '+CINE.price,18*k,40*k);c2.restore()}
+  // impact : flash + texte en aberration chromatique
+  if(CINE.phase==='hit'){const p=CINE.stop>0?1:Math.max(0,1-CINE.t/.6);
+    if(CINE.hit>0){c2.fillStyle=CINE.gold?`rgba(255,220,90,${CINE.hit*.55})`:`rgba(255,255,255,${CINE.hit*.6})`;c2.fillRect(0,0,W,H)}
+    if(CINE.quip&&p>0){c2.font=`100px ${FONT}`;const fit=W*.86/Math.max(1,c2.measureText(CINE.quip).width)*100;const s=Math.min(78*k,fit)*(1+.25*Math.max(0,1-CINE.t*6)),y=Math.min(f.y-60*k,H*.42),o=6*k*p;
+      c2.save();c2.globalAlpha=Math.min(1,p*1.6);c2.translate(W/2,y);c2.rotate(-.08);
+      c2.font=`${s}px ${FONT}`;c2.textAlign='center';c2.textBaseline='middle';c2.globalCompositeOperation='lighter';
+      c2.fillStyle='rgba(255,40,90,.85)';c2.fillText(CINE.quip,-o,0);c2.fillStyle='rgba(40,220,255,.85)';c2.fillText(CINE.quip,o,0);
+      c2.globalCompositeOperation='source-over';outlined(CINE.quip,0,0,s,'#ffffff');
+      if(CINE.combo>1)outlined('COMBO x'+CINE.combo,0,s*.75,s*.42,'#ffd23f');c2.restore()}}
+}
 
 /* =================== CALQUE 2D (textes) =================== */
 function rr(x,y,w,h,r){c2.beginPath();if(c2.roundRect)c2.roundRect(x,y,w,h,r);else c2.rect(x,y,w,h)}
@@ -1788,6 +1850,7 @@ function drawOverlay(){
       g.addColorStop(0,`rgba(${col},0)`);g.addColorStop(1,`rgba(${col},${a})`);c2.fillStyle=g;c2.fillRect(0,0,W,H)}
     if(G.fever>0){c2.fillStyle=`hsla(${(T*240)%360},90%,60%,${.08+G.fevFlash*.3})`;c2.fillRect(0,0,W,H)}
   }
+  cineOverlay(k);
   if(G.white>0){c2.fillStyle=`rgba(255,255,255,${G.white*.85})`;c2.fillRect(0,0,W,H)}
 }
 function drawTuto(k){
@@ -2024,7 +2087,7 @@ $('#roomNext').onclick=()=>{const n=ROOMS[save.room+1];if(n&&save.total>=n.need)
 let last=performance.now(),hudT=0;
 function frame(now){
   const dt=Math.min(.05,(now-last)/1000);last=now;
-  if(!paused)update(dt);
+  if(!paused){update(dt*cineScale());cineUpdate(dt)}
   hudT-=dt;if(hudT<=0){hudT=.1;updParHUD()}
   updateCam(dt);
   renderer.render(scene,camera);
