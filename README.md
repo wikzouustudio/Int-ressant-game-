@@ -20,6 +20,11 @@ Au fil des casses, il débloque de nouveaux pièges :
 - 📞 **Mamie appelle** : quelques secondes de répit.
 - 😰 **Parano** : chaque casse le rend plus méfiant (alertes plus courtes), mais multiplie tes points.
 
+## Zorp le collectionneur 👽
+
+Un petit alien arrive en soucoupe quand le sol est couvert de débris. Il les aspire avec son rayon
+en croyant découvrir « toute la puissance de l'humanité », puis te laisse des 🐟 en offrande.
+
 ## Ce qui fait revenir
 - 🎁 Cadeau quotidien avec série de 7 jours
 - 📋 3 missions qui changent chaque jour
