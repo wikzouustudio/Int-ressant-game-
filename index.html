@@ -35,6 +35,7 @@ html,body{height:100%;margin:0;overflow:hidden;background:var(--night);color:var
   -webkit-user-select:none;user-select:none;touch-action:none;overscroll-behavior:none}
 #cv,#ov{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
 #ov{pointer-events:none}
+#cv{filter:saturate(1.38) contrast(1.1) brightness(1.02)}
 button{font-family:inherit;color:inherit;border:0;cursor:pointer;touch-action:manipulation}
 button:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 [hidden]{display:none!important}
@@ -434,8 +435,42 @@ body{font-family:var(--f-display);letter-spacing:.3px}
 .flyfish{position:fixed;width:40px;height:40px;z-index:95;pointer-events:none}
 .flyfish .ico{width:100%;height:100%}
 .pill.bump{animation:bump .3s}
+
+/* =================== ANIMATIONS DE NAVIGATION =================== */
+@keyframes dropIn{from{opacity:0;transform:translateY(-40px) scale(.6)}}
+@keyframes riseIn{from{opacity:0;transform:translateY(60px) scale(.85)}}
+@keyframes logoIn{0%{opacity:0;transform:scale(.2) rotate(-14deg)}60%{opacity:1;transform:scale(1.15) rotate(3deg)}100%{transform:none}}
+@keyframes popIn{0%{opacity:0;transform:scale(.6) translateY(18px)}70%{opacity:1;transform:scale(1.05)}100%{transform:none}}
+@keyframes slideL{from{opacity:0;transform:translateX(-60px)}}
+@keyframes slideR{from{opacity:0;transform:translateX(60px)}}
+@keyframes boing{0%{scale:1}30%{scale:1.12 .9}55%{scale:.94 1.06}80%{scale:1.03 .98}100%{scale:1}}
+#menu.enter .topbar>*{animation:dropIn .5s cubic-bezier(.2,1.6,.4,1) backwards}
+#menu.enter .topbar>:nth-child(1){animation-delay:.05s}#menu.enter .topbar>:nth-child(3){animation-delay:.12s}
+#menu.enter .topbar>:nth-child(4){animation-delay:.18s}#menu.enter .topbar>:nth-child(5){animation-delay:.24s}
+#menu.enter .title{animation:logoIn .7s cubic-bezier(.2,1.4,.4,1) .1s backwards}
+#menu.enter .bottom>*{animation:riseIn .5s cubic-bezier(.2,1.5,.4,1) backwards}
+#menu.enter .bottom>:nth-child(1){animation-delay:.2s}#menu.enter .bottom>:nth-child(2){animation-delay:.3s}
+#menu.enter .bottom>:nth-child(3){animation-delay:.4s}#menu.enter .bottom>:nth-child(4){animation-delay:.5s}
+#hud.enter .hud-top>*{animation:dropIn .45s cubic-bezier(.2,1.6,.4,1) backwards}
+#hud.enter .hud-top>:nth-child(2){animation-delay:.08s}#hud.enter .hud-top>:nth-child(3){animation-delay:.16s}
+#hud.enter .meter{animation:slideL .45s cubic-bezier(.2,1.4,.4,1) .2s backwards}#hud.enter .meter+.meter{animation-delay:.28s}
+.room-info.swapL{animation:slideL .35s cubic-bezier(.2,1.5,.4,1)}.room-info.swapR{animation:slideR .35s cubic-bezier(.2,1.5,.4,1)}
+.boing{animation:boing .38s ease-out}
+.sheet{animation:sheetUp .45s cubic-bezier(.2,1.35,.4,1)}
+@keyframes sheetUp{from{transform:translateY(100%)}}
+.casc>*{animation:popIn .42s cubic-bezier(.2,1.5,.4,1) backwards}
+.dim.noanim,.dim.noanim .sheet,.dim.noanim .card{animation:none}
+.ghostdim{pointer-events:none!important;z-index:30}
+.ghostdim{animation:fadeOut .24s forwards}.ghostdim .sheet{animation:sheetDown .24s ease-in forwards}.ghostdim .card{animation:cardOut .22s ease-in forwards}
+@keyframes fadeOut{to{opacity:0}}@keyframes sheetDown{to{transform:translateY(100%)}}@keyframes cardOut{to{transform:scale(.6);opacity:0}}
+.wipe{position:fixed;inset:-10% -30%;z-index:80;pointer-events:none;transform:translateX(-130%) skewX(-14deg);
+  background:radial-gradient(circle,rgba(255,255,255,.2) 1.4px,transparent 2px) 0 0/12px 12px,repeating-linear-gradient(115deg,rgba(255,255,255,.12) 0 18px,transparent 18px 44px),linear-gradient(90deg,#ffc21a,#ffd21a 12%,#2f86ff 12.5%,#1f6fe5);
+  border-left:6px solid var(--ink);border-right:6px solid var(--ink)}
+.wipe.in{transition:transform .32s cubic-bezier(.6,0,.4,1);transform:translateX(0) skewX(-14deg)}
+.wipe.out{transition:transform .38s cubic-bezier(.6,0,.4,1);transform:translateX(130%) skewX(-14deg)}
+.wipe b{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) skewX(14deg) rotate(-4deg);font-family:var(--f-display);font-weight:400;font-size:clamp(40px,13vw,64px);color:#fff;text-shadow:var(--ol);white-space:nowrap}
 @media (prefers-reduced-motion:reduce){
-  .logo span,.pulse,.record,.chest.shake,.big-btn::after,.rw-rays{animation:none}
+  .logo span,.pulse,.record,.chest.shake,.big-btn::after,.rw-rays,.casc>*,#menu.enter *,#hud.enter *{animation:none}
 }
 </style>
 </head>
@@ -860,12 +895,12 @@ const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,powerPreference
 renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(36,1,.1,120);
-const hemi=new THREE.HemisphereLight(0xfff6ea,0x8a5a40,.55);scene.add(hemi);
+const hemi=new THREE.HemisphereLight(0xfff6ea,0x8a5a40,.46);scene.add(hemi);
 // lumière chaude qui entre par la fenêtre + projecteur du regard de l'humain
 const winLight=new THREE.PointLight(0xffe2b0,.55,6,1.6);winLight.position.set(.25,2.4,-1.4);scene.add(winLight);
 const gazeSpot=new THREE.SpotLight(0xfff1c0,0,7,.3,.75,1.2);scene.add(gazeSpot,gazeSpot.target);
 const amb=new THREE.AmbientLight(0xffffff,.12);scene.add(amb);
-const sun=new THREE.DirectionalLight(0xfff0d6,.85);sun.position.set(2.5,7,5);sun.castShadow=true;
+const sun=new THREE.DirectionalLight(0xfff0d6,1.0);sun.position.set(2.5,7,5);sun.castShadow=true;
 sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-3.8,right:3.2,top:3.6,bottom:-2.4,near:1,far:18});sun.shadow.bias=-.0005;sun.shadow.normalBias=.02;
 sun.target.position.set(-.5,0,-.4);scene.add(sun,sun.target);
 // dégradé 3 tons pour le rendu « dessin animé »
@@ -2373,10 +2408,18 @@ function updParHUD(){if(!G||G.demo)return;hud.par.style.width=(O.par*100).toFixe
 /* =================== ÉCRANS =================== */
 const menuEl=$('#menu'),hudEl=$('#hud'),root=$('#sheetRoot');
 function toast(t){const el=$('#toast');el.innerHTML=icTok(t);el.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('on'),2200)}
-function closeSheet(){root.innerHTML=''}
+let SHEET_KEY='';
+function closeSheet(){const d=root.firstElementChild;SHEET_KEY='';if(!d){return}
+  // la fenêtre part en glissant pendant que le jeu continue dessous
+  root.removeChild(d);d.classList.add('ghostdim');document.body.appendChild(d);setTimeout(()=>d.remove(),260)}
 function openSheet(html,onBind,center){
-  root.innerHTML=`<div class="dim${center?' center':''}">${html}</div>`;
+  const key=(html.match(/<h2>([^<]*)/)||[])[1]||'',same=!!root.firstElementChild&&key===SHEET_KEY;SHEET_KEY=key;
+  root.innerHTML=`<div class="dim${center?' center':''}${same?' noanim':''}">${html}</div>`;
   const dim=root.firstElementChild;
+  // cascade d'apparition des éléments (seulement à l'ouverture ou au changement d'onglet)
+  if(!same||openSheet.tab){const box=dim.querySelector('.grid')||dim.querySelector('.list')||dim.querySelector('.card');
+    if(box){box.classList.add('casc');[...box.children].forEach((c,i)=>c.style.animationDelay=(.08+Math.min(i,10)*.055)+'s')}}
+  openSheet.tab=0;
   dim.addEventListener('pointerdown',e=>{if(e.target===dim&&!center){sfx('click');closeSheet();renderMenu()}});
   onBind&&onBind(dim);
 }
@@ -2393,14 +2436,18 @@ function renderMenu(){
   $('#mFoot').textContent=`Record : ${fmt(save.best)} · ${fmt(save.total)} objets cassés au total`;
 }
 let builtRoom=-1;
+function enterAnim(el){el.classList.remove('enter');void el.offsetWidth;el.classList.add('enter');clearTimeout(el._et);el._et=setTimeout(()=>el.classList.remove('enter'),1400)}
+function wipe(fn,label){const w=document.createElement('div');w.className='wipe';if(label)w.innerHTML=`<b>${label}</b>`;document.body.appendChild(w);
+  void w.offsetWidth;w.classList.add('in');sfx('whoosh');setTimeout(()=>{fn();setTimeout(()=>{w.classList.remove('in');w.classList.add('out');setTimeout(()=>w.remove(),420)},label?260:90)},330)}
 function showMenu(){
+  enterAnim(menuEl);
   closeSheet();introEl.hidden=true;if(builtRoom!==save.room){buildRoom();builtRoom=save.room}
   resetRun(true);hudEl.hidden=true;menuEl.hidden=false;renderMenu();
 }
 function startGame(){
   audioInit();closeSheet();
   if(builtRoom!==save.room){buildRoom();builtRoom=save.room}
-  menuEl.hidden=true;hudEl.hidden=false;
+  menuEl.hidden=true;hudEl.hidden=false;enterAnim(hudEl);
   resetRun(false);holding=false;updHUD();updParHUD();
   sfx('meow');
 }
@@ -2442,8 +2489,8 @@ function endGame(){
     ${nextRoom&&!unlocked.length?`<div class="goal">Encore ${fmt(nextRoom.need-save.total)} objets pour débloquer ${nextRoom.n} ${ic('lock')}</div>`:''}
     <div class="btns"><button class="big-btn" id="again">REJOUER</button><button class="ghost" id="toMenu">Menu</button></div>
   </div>`,dim=>{
-    dim.querySelector('#again').onclick=()=>{sfx('click');startGame()};
-    dim.querySelector('#toMenu').onclick=()=>{sfx('click');showMenu()};
+    dim.querySelector('#again').onclick=()=>{sfx('click');wipe(startGame,'C\'EST REPARTI !')};
+    dim.querySelector('#toMenu').onclick=()=>{sfx('click');wipe(showMenu)};
     const el=dim.querySelector('#ovScore');const t0=performance.now();
     (function cnt(){const kk=Math.min(1,(performance.now()-t0)/900);el.textContent=fmt(s*(1-Math.pow(1-kk,3)));if(kk<1)requestAnimationFrame(cnt)})();
     if(unlocked.length)setTimeout(()=>rewardShow({ic:'unlock',title:'NOUVELLE PIÈCE !',name:unlocked[unlocked.length-1].n,col:'#ff8a3d'}),1300);
@@ -2492,7 +2539,7 @@ function openShop(){
   openSheet(`<div class="sheet"><div class="sheet-head"><h2>Boutique</h2><div class="pill"><span class="ic">${ic('fish')}</span>${fmt(save.coins)}</div><button class="close" id="x" aria-label="Fermer">✕</button></div>${tabs}<div class="list">${body}</div></div>`,dim=>{
     dim.querySelector('.list').scrollTop=scroll;
     dim.querySelector('#x').onclick=()=>{sfx('click');closeSheet();renderMenu()};
-    dim.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{sfx('click');shopTab=b.dataset.t;root.innerHTML='';openShop()});
+    dim.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{sfx('click');shopTab=b.dataset.t;openSheet.tab=1;openShop()});
     dim.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const u=UPG.find(x=>x.id===b.dataset.up),l=save.up[u.id],c=u.cost[l];
       if(l<u.max&&save.coins>=c){save.coins-=c;save.up[u.id]++;persist();sfx('buy');vib(30);openShop();rewardShow({ic:u.e,title:'AMÉLIORATION !',name:`${u.n} · niveau ${save.up[u.id]}`,col:'#a34dff'})}});
     dim.querySelectorAll('[data-it]').forEach(b=>b.onclick=()=>{
@@ -2607,15 +2654,16 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){holding=fa
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('gesturestart',e=>e.preventDefault());
 
-$('#playBtn').onclick=()=>{sfx('click');startGame()};
+document.addEventListener('pointerup',e=>{const b=e.target.closest&&e.target.closest('button');if(!b||b.disabled)return;b.classList.remove('boing');void b.offsetWidth;b.classList.add('boing');setTimeout(()=>b.classList.remove('boing'),400)},true);
+$('#playBtn').onclick=()=>{sfx('click');wipe(startGame,'C\'EST PARTI !')};
 $('#shopBtn').onclick=()=>{audioInit();sfx('click');openShop()};
 $('#misBtn').onclick=()=>{audioInit();sfx('click');openMissions()};
 $('#giftBtn').onclick=()=>{audioInit();sfx('click');openGift()};
 $('#pauseBtn').onclick=()=>{sfx('click');pause()};
 $('#sndBtn').onclick=()=>{audioInit();save.sound=!save.sound;persist();applyVol();sfx('click');renderMenu()};
 $('#musBtn').onclick=()=>{audioInit();save.music=!save.music;persist();applyVol();sfx('click');renderMenu()};
-$('#roomPrev').onclick=()=>{if(save.room>0){save.room--;persist();sfx('click');showMenu()}};
-$('#roomNext').onclick=()=>{const n=ROOMS[save.room+1];if(n&&save.total>=n.need){save.room++;persist();sfx('click');showMenu()}};
+$('#roomPrev').onclick=()=>{if(save.room>0){save.room--;persist();sfx('click');wipe(()=>{showMenu();menuEl.classList.remove('enter');const r=$('.room-info');r.classList.remove('swapL','swapR');void r.offsetWidth;r.classList.add('swapL')},ROOMS[save.room].n.toUpperCase())}};
+$('#roomNext').onclick=()=>{const n=ROOMS[save.room+1];if(n&&save.total>=n.need){save.room++;persist();sfx('click');wipe(()=>{showMenu();menuEl.classList.remove('enter');const r=$('.room-info');r.classList.remove('swapL','swapR');void r.offsetWidth;r.classList.add('swapR')},n.n.toUpperCase())}};
 
 /* =================== DÉMARRAGE =================== */
 let last=performance.now(),hudT=0;
