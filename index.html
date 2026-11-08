@@ -2420,7 +2420,7 @@ function openSheet(html,onBind,center){
   if(!same||openSheet.tab){const box=dim.querySelector('.grid')||dim.querySelector('.list')||dim.querySelector('.card');
     if(box){box.classList.add('casc');[...box.children].forEach((c,i)=>c.style.animationDelay=(.08+Math.min(i,10)*.055)+'s')}}
   openSheet.tab=0;
-  dim.addEventListener('pointerdown',e=>{if(e.target===dim&&!center){sfx('click');closeSheet();renderMenu()}});
+  const t0=performance.now();dim.addEventListener('pointerdown',e=>{if(e.target===dim&&!center&&performance.now()-t0>500){sfx('click');closeSheet();renderMenu()}});
   onBind&&onBind(dim);
 }
 function renderMenu(){
@@ -2552,7 +2552,8 @@ function openShop(){
 
 /* ----- Récompense : cinématique ----- */
 let RW=null;
-function rewardShow(o){
+function rewardShow(o){try{rewardShow2(o)}catch(e){if(RW){RW.remove();RW=null}o.done&&o.done()}}
+function rewardShow2(o){
   if(RW)RW.remove();audioInit();
   const el=RW=document.createElement('div');el.className='rw';el.style.setProperty('--rc',o.col||'#3a7bff');
   const spk=[[-95,-80,.0],[100,-60,.35],[-80,85,.7],[90,95,.2],[0,-115,.55],[-120,10,.9],[120,20,1.1]].map(([x,y,d])=>`<div class="rw-spk" style="left:${115+x-15}px;top:${115+y-15}px;animation-delay:${d}s">${ic(Math.random()<.5?'sparkle':'star')}</div>`).join('');
@@ -2560,7 +2561,7 @@ function rewardShow(o){
     <div class="rw-stage"><div class="rw-orb"></div>${spk}<div class="rw-item">${o.img?`<img src="${o.img}" alt="">`:ic(o.ic||'gift')}</div></div>
     <div class="rw-banner"><span>${o.title}</span></div>${o.name?`<div class="rw-name">${icTok(o.name)}</div>`:''}${o.amt?`<div class="rw-amt">+<b>0</b>${ic('fish')}</div>`:''}<div class="rw-tap">Touche pour continuer</div>`;
   document.body.appendChild(el);sfx('charge');vib(15);
-  let can=false;
+  let can=false;setTimeout(()=>can=true,2500);
   setTimeout(()=>{if(!el.isConnected)return;el.classList.add('pop');sfx('reward');vib([50,40,90]);rwConfetti(el.querySelector('canvas'),o.col);
     if(o.amt){const b=el.querySelector('.rw-amt b'),t0=performance.now()+600;let last=-1;
       (function cnt(){if(!el.isConnected)return;const k=clamp((performance.now()-t0)/900,0,1),v=Math.round(o.amt*(1-Math.pow(1-k,3)));if(v!==last){last=v;b.textContent=fmt(v);if(k>0&&k<1)sfx('tick')}if(k<1)requestAnimationFrame(cnt)})()}
@@ -2654,7 +2655,8 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){holding=fa
 document.addEventListener('contextmenu',e=>e.preventDefault());
 document.addEventListener('gesturestart',e=>e.preventDefault());
 
-document.addEventListener('pointerup',e=>{const b=e.target.closest&&e.target.closest('button');if(!b||b.disabled)return;b.classList.remove('boing');void b.offsetWidth;b.classList.add('boing');setTimeout(()=>b.classList.remove('boing'),400)},true);
+// effet ressort lancé APRÈS le clic : Safari iOS annule un clic si l'affichage change pendant le toucher
+document.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button');if(!b||b.disabled)return;requestAnimationFrame(()=>{if(!b.isConnected)return;b.classList.remove('boing');void b.offsetWidth;b.classList.add('boing');setTimeout(()=>b.classList.remove('boing'),400)})});
 $('#playBtn').onclick=()=>{sfx('click');wipe(startGame,'C\'EST PARTI !')};
 $('#shopBtn').onclick=()=>{audioInit();sfx('click');openShop()};
 $('#misBtn').onclick=()=>{audioInit();sfx('click');openMissions()};
