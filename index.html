@@ -312,6 +312,67 @@ body{font-family:var(--f-display);letter-spacing:.3px}
 #toast{background:linear-gradient(#ffe45c,var(--yel-d));color:#fff;text-shadow:var(--ol-s);font-family:var(--f-display);font-weight:400;font-size:18px;border-radius:12px;box-shadow:0 5px 0 var(--ink)}
 #toast .ico{filter:drop-shadow(0 2px 0 var(--ink))}
 #loading{background:radial-gradient(circle,#1f6fe5,#0e2a66);text-shadow:var(--ol)}
+
+/* =================== STYLE CARTOON DÉTAILLÉ : trame de points, reflets, rayures, bord intérieur, lèvre en relief =================== */
+.big-btn,.mid-btn,.icon-btn,.buy,.close,.tab,.ghost,.room-card .arrow,.record,#toast,.streak b,.unlock,.sheet-head h2,.card h2{
+  --a:#7ec8ff;--b:#2f86ff;--d:#1650c0;--r:#a9dcff;
+  background:
+    radial-gradient(circle,rgba(255,255,255,.2) 1.1px,transparent 1.7px) 0 0/7px 7px,
+    repeating-linear-gradient(115deg,rgba(255,255,255,.12) 0 7px,transparent 7px 20px),
+    linear-gradient(180deg,rgba(255,255,255,.5) 0%,rgba(255,255,255,.14) 46%,transparent 47%),
+    linear-gradient(var(--a),var(--b) 58%,var(--d))!important;
+  box-shadow:inset 0 0 0 2.5px var(--r),inset 0 -6px 0 rgba(0,0,0,.2),0 5px 0 var(--ink)!important}
+.big-btn,.tab.on,.record,#toast,.streak b.t,.buy.eqb,.room-card .arrow{--a:#fff27a;--b:#ffc21a;--d:#f08c00;--r:#fff6b0}
+.buy,.streak b.d,.sheet-head h2,.card h2{--a:#a6ff6a;--b:#43d128;--d:#1f9a14;--r:#cfff9e}
+.close{--a:#ff8a8a;--b:#f03a3a;--d:#b51420;--r:#ffb3b3}
+.tab,.streak b,.buy:disabled{--a:#9aa7c7;--b:#6c7aa0;--d:#4a5578;--r:#c4cde3}
+.unlock{--a:#ff9ad0;--b:#e23fa0;--d:#a3157a;--r:#ffc2e6}
+.unlock[style]{--a:#9dffd8;--b:#24c98f;--d:#108a60;--r:#c8ffe9}
+.big-btn{border-radius:18px;box-shadow:inset 0 0 0 3px var(--r),inset 0 -8px 0 rgba(0,0,0,.18),0 7px 0 var(--ink),0 14px 20px rgba(0,0,0,.3)!important}
+.big-btn:active,.mid-btn:active,.icon-btn:active,.buy:active,.ghost:active,.close:active{box-shadow:inset 0 0 0 2.5px var(--r),inset 0 -3px 0 rgba(0,0,0,.2),0 1px 0 var(--ink)!important}
+/* titres en bannière verte */
+.sheet-head h2,.card h2{display:inline-block;flex:0 1 auto;align-self:flex-start;padding:4px 18px 6px;border:3px solid var(--ink);border-radius:14px;transform:none;font-size:30px;color:#fff;text-shadow:var(--ol)}
+.card h2{align-self:center}
+.sheet-head .spacer2{flex:1}
+.close{width:auto;min-width:46px;height:46px;padding:0 12px;font-size:22px;border-radius:14px}
+/* fenêtres : cadre blanc + panneau intérieur clair à trame */
+.sheet,.card{--a:#fff;color:var(--ink);
+  background:radial-gradient(circle,rgba(150,170,220,.22) 1.2px,transparent 1.8px) 0 0/9px 9px,linear-gradient(#f7f9ff,#dfe7fb)!important;
+  box-shadow:inset 0 0 0 5px #fff,inset 0 0 0 8px #c7d3f0,0 8px 0 var(--ink)!important}
+.sheet{box-shadow:inset 0 0 0 5px #fff,inset 0 0 0 8px #c7d3f0!important}
+.card p,.note,.goal,.verdict{color:#1d2b55!important;text-shadow:none!important}
+.over-score,.earn,.reward,.rank{filter:drop-shadow(0 2px 0 rgba(0,0,0,.15))}
+/* cartes colorées (objets de boutique, pouvoirs, missions, rapport, pièce, intro) */
+.item,.tile,.mis,.report,.room-card,#intro{
+  --a:#7ec8ff;--b:#2f86ff;--d:#1650c0;--r:#bfe6ff;
+  background:
+    radial-gradient(circle,rgba(255,255,255,.16) 1.3px,transparent 2px) 0 0/9px 9px,
+    radial-gradient(ellipse at 50% 18%,rgba(255,255,255,.45),transparent 62%),
+    repeating-linear-gradient(105deg,rgba(255,255,255,.08) 0 14px,transparent 14px 34px),
+    linear-gradient(var(--a),var(--b) 55%,var(--d))!important;
+  box-shadow:inset 0 0 0 3px var(--r),inset 0 -6px 0 rgba(0,0,0,.18),0 5px 0 var(--ink)!important;border-radius:16px}
+.tile:nth-child(4n+1),.item:nth-child(5n+1),.mis:nth-child(3n+1){--a:#ff8ad8;--b:#d63bb0;--d:#9b1a8a;--r:#ffc2ef}
+.tile:nth-child(4n+2),.item:nth-child(5n+2),.mis:nth-child(3n+2){--a:#c08bff;--b:#7a3df0;--d:#4b1fb0;--r:#dcc4ff}
+.tile:nth-child(4n+3),.item:nth-child(5n+3){--a:#a6ff6a;--b:#3fc22a;--d:#1f8a14;--r:#d6ffb0}
+.tile:nth-child(4n),.item:nth-child(5n+4){--a:#7ef0ff;--b:#1fb6e8;--d:#0f7bb8;--r:#c2f6ff}
+.item:nth-child(5n){--a:#ffd36a;--b:#ff9a1f;--d:#d9600a;--r:#ffe7b0}
+.report{--a:#7ec8ff;--b:#2f86ff;--d:#1650c0}
+.tile .nm{order:-1;font-size:15px;min-height:30px}
+.tile img{background:radial-gradient(circle,rgba(255,255,255,.35),transparent 70%);border-radius:50%}
+.tile.eq{box-shadow:inset 0 0 0 3px var(--r),0 0 0 4px #ffd21a,0 5px 0 var(--ink)!important}
+.item .em{background:radial-gradient(circle,rgba(255,255,255,.45),transparent 70%);border-radius:50%;height:52px;width:52px;display:grid;place-items:center}
+/* jauges & barres façon bouton */
+.meter-bar>div,.bar>i{background-image:repeating-linear-gradient(115deg,rgba(255,255,255,.25) 0 6px,transparent 6px 14px),linear-gradient(180deg,rgba(255,255,255,.45),transparent 50%)!important;background-color:transparent}
+#chaosFill{background:repeating-linear-gradient(115deg,rgba(255,255,255,.25) 0 6px,transparent 6px 14px),linear-gradient(180deg,rgba(255,255,255,.45),transparent 50%),linear-gradient(90deg,#ff8a3d,#ffd23f)!important}
+#chaosFill.fever{background:repeating-linear-gradient(115deg,rgba(255,255,255,.3) 0 6px,transparent 6px 14px),linear-gradient(90deg,#ff4d6d,#ffd23f,#5ef2c2,#6fa8ff,#c86bff)!important;background-size:200% 100%!important}
+#parFill{background:repeating-linear-gradient(115deg,rgba(255,255,255,.25) 0 6px,transparent 6px 14px),linear-gradient(180deg,rgba(255,255,255,.45),transparent 50%),linear-gradient(90deg,#ffb36b,#ff4d6d)!important}
+.bar>i{background:repeating-linear-gradient(115deg,rgba(255,255,255,.3) 0 6px,transparent 6px 14px),linear-gradient(180deg,rgba(255,255,255,.5),transparent 50%),linear-gradient(#fff27a,#f0a000)!important}
+.pill{background:radial-gradient(circle,rgba(255,255,255,.1) 1px,transparent 1.6px) 0 0/6px 6px,linear-gradient(#3a2a5c,#1a1030)!important;box-shadow:inset 0 0 0 2px #5a4a80,0 4px 0 var(--ink)!important}
+.pill{color:#fff}
+.tab,.streak b{color:#fff!important;text-shadow:var(--ol-s)!important}
+.buy.eqb:disabled{--a:#fff27a;--b:#ffc21a;--d:#f08c00;--r:#fff6b0;color:#fff}
+.buy:disabled{color:#e8ecf7}
+.report .verdict{color:#fff!important;text-shadow:0 1.5px 0 var(--ink)!important}
 @media (prefers-reduced-motion:reduce){
   .logo span,.pulse,.record,.chest.shake,.big-btn::after{animation:none}
 }
