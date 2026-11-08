@@ -735,7 +735,7 @@ function catPrims(){
   return p;
 }
 let CATS=null;
-function catSculpt(){return CATS||(CATS=sculpt({prims:catPrims(),b:[-.63,-.02,-.3,.75,.94,.3],res:.0086,bones:CATB,sigB:.028}))}
+function catSculpt(){return CATS||(CATS=sculpt({prims:catPrims(),b:[-.63,-.02,-.3,.75,.94,.3],res:.0074,bones:CATB,sigB:.028}))}
 const SPOTS=[[-.15,.42,.15,.11],[.1,.4,-.17,.1],[-.32,.3,.12,.08],[.46,.68,.1,.07],[-.5,.62,0,.06],[.05,.2,.16,.07]];
 function catPaint(sk){
   const body=rgb(sk.body),belly=rgb(sk.belly),pink=rgb('#ff9ab8'),nose=rgb('#ff6f9a'),st=sk.stripe?rgb(sk.stripe):null,pt=sk.points?rgb(sk.points):null,sp=sk.spots?rgb(sk.spots):null;
@@ -844,7 +844,7 @@ function humanPrims(){
   return p;
 }
 let HUMS=null,SNKS=null,HPHS=null,PHONES=null;
-function humanSculpt(){if(!HUMS){HUMS=sculpt({prims:humanPrims(),b:[-.56,-.02,-.26,.56,1.95,.25],res:.0118,bones:HB,sigB:.03});
+function humanSculpt(){if(!HUMS){HUMS=sculpt({prims:humanPrims(),b:[-.56,-.02,-.26,.56,1.95,.25],res:.0102,bones:HB,sigB:.03});
   colorize(HUMS,null,(x,y,z,c,p,nx)=>{
     if((p.tag==='hoodie')&&z>.13&&y>1.17&&y<1.36&&Math.abs(Math.abs(x)-.045)<.007)return rgb('#ffffff');                  // cordons de capuche
     if(p.tag==='hoodie'&&z>.15&&y>.97&&y<1.12&&Math.abs(x)<.13){const e=Math.min(.13-Math.abs(x),y-.97,1.12-y);return e<.012?rgb(HC.hdd):mixc(c,rgb(HC.hdd),.25)} // poche kangourou
@@ -1093,9 +1093,10 @@ const OD={
 };
 const OC={};
 function objKey(o){return o.m+'|'+o.c+'|'+(o.pic||'')}
+const OBJRES=.5;
 function objData(o){const k=objKey(o);if(OC[k])return OC[k];
   const d=OD[o.m](o.c,o);
-  const parts=d.parts.map(p=>{if(p.make)return{p};const s=sculpt(Object.assign({},p,{res:p.res*.85}));colorize(s,null,p.paint);return{p,s,geo:s.geo}});
+  const parts=d.parts.map(p=>{if(p.make)return{p};const s=sculpt(Object.assign({},p,{res:p.res*OBJRES}));colorize(s,null,p.paint);return{p,s,geo:s.geo}});
   let x0=1e9,x1=-1e9,y1=0;
   for(const q of parts){if(!q.geo)continue;const bb=q.geo.boundingBox;x0=Math.min(x0,bb.min.x);x1=Math.max(x1,bb.max.x);y1=Math.max(y1,bb.max.y)}
   return OC[k]={d,parts,hh:y1,rx:Math.max(-x0,x1),pieces:null};
@@ -1556,30 +1557,31 @@ function buildAlien(){
   const beam=new THREE.Mesh(new THREE.CylinderGeometry(.09,.3,1,24,1,true),new THREE.MeshBasicMaterial({color:0x8dff7a,transparent:true,opacity:0,depthWrite:false,blending:THREE.AdditiveBlending,side:THREE.DoubleSide}));
   scene.add(beam);beam.visible=false;AL.beam=beam;
   g.scale.setScalar(1.35);g.visible=false;scene.add(g);AL.g=g}
-function alienSay(a,d=2){AL.bub=pick(a);AL.bt=d}
+function alienSay(a,d=3.4){let l=pick(a);if(a.length>1)while(l===AL.bub)l=pick(a);AL.bub=l;AL.bt=d}
 function alienReset(){AL.st='off';AL.cd=14;AL.list=[];if(AL.g){AL.g.visible=false;AL.beam.visible=false}}
 function alienUpdate(dt){if(!AL.g)buildAlien();
   AL.bt-=dt;
   if(AL.st==='off'){if(G.demo||G.state!=='play'||G.over)return;AL.cd-=dt;
     if(AL.cd<=0&&WRECK.length>=5&&!CINE.on&&!PCS.length){let x=0,z=0;for(const w of WRECK){x+=w.position.x;z+=w.position.z}x/=WRECK.length;z/=WRECK.length;
-      AL.fx=Math.max(x,tableR+.25);AL.fz=clamp(z,-.2,1.2);AL.st='in';AL.t=0;AL.sx=AL.fx+3.2;AL.sy=2.6;AL.sz=AL.fz+1.2;AL.g.visible=true;sfx('ufo');alienSay(ALINES.hi,1.8);
+      AL.fx=Math.max(x,tableR+.25);AL.fz=clamp(z,-.2,1.2);AL.st='in';AL.t=0;AL.sx=AL.fx+3.2;AL.sy=2.6;AL.sz=AL.fz+1.2;AL.g.visible=true;sfx('ufo');alienSay(ALINES.hi,3);
       if(introduce('alien'))AL.t=-.6}
     return}
   AL.t+=dt;const g=AL.g,bob=Math.sin(T*3)*.03;
-  if(AL.st==='in'){const k=sstep(0,1.5,AL.t);g.position.set(lerp(AL.sx,AL.fx,k),lerp(AL.sy,.85,k)+bob,lerp(AL.sz,AL.fz,k));g.rotation.z=(1-k)*.35;
-    if(AL.t>=1.5){AL.st='suck';AL.t=0;AL.list=WRECK.slice();AL.got=0;alienSay(ALINES.suck,2.2)}}
+  if(AL.st==='in'){const k=sstep(0,2.2,AL.t);g.position.set(lerp(AL.sx,AL.fx,k),lerp(AL.sy,.85,k)+bob,lerp(AL.sz,AL.fz,k));g.rotation.z=(1-k)*.35;
+    if(AL.t>=2.2){AL.st='suck';AL.t=0;AL.list=WRECK.slice();AL.got=0}}
   else if(AL.st==='suck'){g.position.set(AL.fx+Math.sin(T*1.3)*.04,.85+bob,AL.fz);g.rotation.z=Math.sin(T*2)*.06;
     const b=AL.beam;b.visible=true;b.material.opacity=Math.min(.32,AL.t*1.2)*(.8+.2*Math.sin(T*20));b.position.set(g.position.x,(g.position.y-.04)/2,g.position.z);b.scale.y=g.position.y-.04;
-    AL.list.forEach((w,i)=>{const t0=i*.22,u=(AL.t-t0)/.9;if(u<0||!w.parent)return;
+    AL.list.forEach((w,i)=>{const t0=.6+i*.32,u=(AL.t-t0)/1.1;if(u<0||!w.parent)return;
       if(!w.userData.s0){w.userData.s0=w.scale.x||1;w.userData.p0=w.position.clone();const k=PCS.findIndex(q=>q.o===w);if(k>=0)PCS.splice(k,1)}
       const e=u*u;w.position.set(lerp(w.userData.p0.x,g.position.x,e),lerp(w.userData.p0.y,g.position.y,Math.min(1,u)),lerp(w.userData.p0.z,g.position.z,e));
       w.rotation.y+=dt*8;w.scale.setScalar(w.userData.s0*Math.max(0,1-e*e));
-      if(u>=1){scene.remove(w);const j=WRECK.indexOf(w);if(j>=0)WRECK.splice(j,1);AL.got++;sfx('zap');if(AL.got%3===1)alienSay(ALINES.suck,1.6)}});
-    if(AL.t>AL.list.length*.22+1.1){instClear();
+      if(u>=1){scene.remove(w);const j=WRECK.indexOf(w);if(j>=0)WRECK.splice(j,1);AL.got++;sfx('zap');if(AL.bt<-.4)alienSay(ALINES.suck)}});
+    if(AL.t>Math.max(AL.list.length*.32+1.9,3.6)){instClear();
       const n=Math.min(12,AL.got+2);save.coins+=n;persist();sfx('coin');addPop(g.position.x,1.5,g.position.z,`Offrande alien +${n} 🐟`,'#8dff7a',22,1.8);
-      AL.st='out';AL.t=0;alienSay(ALINES.bye,2);b.visible=false}}
-  else if(AL.st==='out'){const k=sstep(0,1.3,AL.t);g.position.set(AL.fx-k*1.2,.85+k*2.6+bob,AL.fz-k*1.6);g.rotation.z=-k*.4;
-    if(AL.t>1.4){AL.st='off';AL.cd=rand(28,45);g.visible=false}}
+      AL.st='out';AL.t=0;alienSay(ALINES.bye,3.6);b.visible=false}}
+  else if(AL.st==='out'){const h=Math.max(0,AL.t-1.2),k=h*h*.9+h*.6;g.position.set(AL.fx+k*1.5,.85+k*1.1+bob,AL.fz+k*.5);g.rotation.z=-Math.min(.45,h*.6);
+    const sp=scr(g.position.x,g.position.y,g.position.z),m=60;
+    if(AL.t>12||(h>0&&(sp.x>W+m*2||sp.y<-m*2||sp.x<-m*2))){AL.st='off';AL.cd=rand(28,45);g.visible=false}}
   if(g.visible){g.rotation.y=.35+Math.sin(T*1.5)*.15;const am=g.userData.al;am.rotation.z=Math.sin(T*6)*.08;am.position.y=.01+Math.abs(Math.sin(T*5))*.012}}
 
 function update(dt){
@@ -1616,7 +1618,7 @@ function update(dt){
   if(edgeMark){const near=o&&!o.falling&&o.x>tableR-.35&&!G.demo;edgeMark.material.opacity=near?.5+.4*Math.sin(T*20):0}
   for(const bl of BULBS){const k=.65+.35*Math.sin(T*2.4+bl.ph*1.7);bl.m.color.copy(bl.base).multiplyScalar(k+.2)}
   for(const m of GROW){if(m.userData.grow<1){m.userData.grow=Math.min(1,m.userData.grow+dt*3);m.scale.setScalar(Math.max(.01,easeBack(m.userData.grow)))}}
-  if(JOBQ.length&&(G.demo||cat.mode!=="push")){const t0=performance.now();JOBQ.shift()();JOBT.push(Math.round(performance.now()-t0))}
+  if(JOBQ.length&&(G.state!=='play'||G.demo||cat.mode==='wait'||['rise','walk','inspect','place'].includes(O.st))){const t0=performance.now();JOBQ.shift()();JOBT.push(Math.round(performance.now()-t0))}
   if(AC&&scrapeG){const tgt=pushing&&!G.demo?.05+.22*O.heat:0;scrapeG.gain.setTargetAtTime(tgt,AC.currentTime,.05);scrapeF.frequency.setTargetAtTime(600+O.heat*900,AC.currentTime,.1)}
 }
 function pushSpeed(o){return .76*(1+.1*save.up.paw)*(G.fever>0?2.3:1)/o.w*(1+diff()*.12)}
@@ -1802,7 +1804,7 @@ let camK=1,W=400,H=700,UIK=1,DPR=1,QDPR=0;
 const QA={acc:0,n:0,slow:0,lvl:2};
 function qualityTick(dt){if(document.hidden)return;QA.acc+=dt;QA.n++;if(QA.acc<2)return;const fps=QA.n/QA.acc;QA.acc=0;QA.n=0;
   const mx=Math.min(window.devicePixelRatio||1,2);let q=QDPR||mx;
-  if(fps<40){q=Math.max(1,q-.25);if(++QA.slow>=3&&QA.lvl>0){QA.lvl--;QA.slow=0;applyShadowTier()}}
+  if(fps<(q>1.5?40:27)){q=Math.max(Math.min(mx,fps<22?1:1.5),q-.25);if(++QA.slow>=3&&QA.lvl>0){QA.lvl--;QA.slow=0;applyShadowTier()}}
   else if(fps>57){q=Math.min(mx,q+.125);QA.slow=0}
   if(Math.abs(q-(QDPR||mx))>.01){QDPR=q;renderer.setPixelRatio(q);renderer.setSize(W,H,false)}}
 function applyShadowTier(){const sz=[512,1024,2048][QA.lvl];scene.traverse(o=>{if(o.isLight&&o.castShadow&&o.shadow){if(o.shadow.mapSize.x>sz){o.shadow.mapSize.set(sz,sz);if(o.shadow.map){o.shadow.map.dispose();o.shadow.map=null}}}});
