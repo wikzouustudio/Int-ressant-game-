@@ -2307,13 +2307,23 @@ function resize(){
 }
 function portraitW(){return G&&G.state==='play'?5.1:5.4}
 let CAMO=null;
+const PCAM={p:0,v:0},_pc=new V3(),_pt=new V3(),_upY=new V3(0,1,0);
 function updateCam(dt){
   camK+=((G.state==='play'?0:1)-camK)*Math.min(1,dt*3);
   const vf=camera.fov*Math.PI/180,hf=2*Math.atan(Math.tan(vf/2)*camera.aspect);
   const dist=Math.max(portraitW()/2/Math.tan(hf/2),3.75/2/Math.tan(vf/2))*(1+camK*.06);
   const portrait=camera.aspect<1;
   camT.set(-.15,1.0+(portrait?.3:0)-camK*(portrait?.85:.35),-.3);
-  camera.position.copy(camT).addScaledVector(camDir,dist);
+  // caméra de poussée : pendant qu'on pousse, elle glisse sur le côté (vue en enfilade vers le bord de la table),
+  // puis revient à l'angle de base avec un ressort amorti — aucun à-coup dans un sens ni dans l'autre
+  const want=G.state==='play'&&!G.demo&&holding&&cat.mode==='push'&&G.obj&&!G.obj.falling&&!CINE.on?1:0;
+  const kk=want?14:9,acc=(want-PCAM.p)*kk*kk-PCAM.v*2*kk;PCAM.v+=acc*dt;PCAM.p=clamp(PCAM.p+PCAM.v*dt,0,1);
+  const e=PCAM.p*PCAM.p*(3-2*PCAM.p);
+  if(e>.001){const o=G.obj;
+    _pc.copy(camDir).applyAxisAngle(_upY,.42*e);_pc.y+=.04*e;_pc.normalize();
+    if(o){_pt.set(lerp(camT.x,(o.x+ownerX)*.5+.15,.6*e),lerp(camT.y,TT+.15+(portrait?.3:0),.4*e),lerp(camT.z,-.45,.4*e));camT.copy(_pt)}
+    camera.position.copy(camT).addScaledVector(_pc,dist*(1-.1*e))}
+  else camera.position.copy(camT).addScaledVector(camDir,dist);
   if(shake){camera.position.x+=rand(-1,1)*shake*.06;camera.position.y+=rand(-1,1)*shake*.06}
   camera.lookAt(camT);
   cineCam();if(CINE.k<=0&&camera.fov!==36){camera.fov=36;camera.updateProjectionMatrix()}
@@ -2778,7 +2788,7 @@ window.__minou={beam:()=>({vis:OW.beam.visible,op:OW.beamM.uniforms.op.value,pos
       holding=G.state==='play'&&bot(v,{O,G,cat});const lv=G.lives,st=O.st,ht=O.heat;update(1/60);if(G.lives<lv){const k=st+(ht>.9?'+bruit':'');log.caught[k]=(log.caught[k]||0)+1}
       log.t=t;if(G.state!=='play')break}
     log.breaks=G.breaks;log.waves=G.waves;log.score=G.score;log.state=G.state;return log},
-  start:()=>{closeSheet();menuEl.hidden=true;hudEl.hidden=false;resetRun(false)},test:()=>{const t={};for(const R of ROOMS)for(const o of R.objs){const t0=performance.now();const od=objData(o);buildPieces(od);t[o.m]=Math.round(performance.now()-t0)+'ms/'+od.parts.length+'p'}return t},clear:()=>{for(const o of G.line)scene.remove(o.piv);G.line=[];if(G.obj){scene.remove(G.obj.piv);G.obj=null}cat.mode='wait';cat.target=null;tableCleared()},cat:()=>cat,act:a=>nextAction(a),cam:v=>{CAMO=v},al:()=>AL,icsheet:()=>Object.keys(ICON).filter(n=>!ICFLAT.test(n)).map(n=>`<span style="width:72px;height:72px;display:inline-block">${icSvg(n)}</span>`).join(""),show:ms=>{ms.forEach((m,i)=>{const o=ROOMS.flatMap(r=>r.objs).find(q=>q.m===m);const r=instObj(o);r.piv.position.set(-1.25+i*.5,r.hh/2,1.3)})},wreck:()=>WRECK.length,splat:(x,z,c,r)=>{splat(x,z,c,r);const m=DEBI.disc.m;return Array.from(m.instanceColor.array.slice(0,9)).join(",")+" n="+m.count},
+  start:()=>{closeSheet();menuEl.hidden=true;hudEl.hidden=false;resetRun(false)},test:()=>{const t={};for(const R of ROOMS)for(const o of R.objs){const t0=performance.now();const od=objData(o);buildPieces(od);t[o.m]=Math.round(performance.now()-t0)+'ms/'+od.parts.length+'p'}return t},clear:()=>{for(const o of G.line)scene.remove(o.piv);G.line=[];if(G.obj){scene.remove(G.obj.piv);G.obj=null}cat.mode='wait';cat.target=null;tableCleared()},cat:()=>cat,act:a=>nextAction(a),cam:v=>{CAMO=v},al:()=>AL,pcam:(v,hold)=>{PCAM.p=v;PCAM.v=0;holding=!!hold},icsheet:()=>Object.keys(ICON).filter(n=>!ICFLAT.test(n)).map(n=>`<span style="width:72px;height:72px;display:inline-block">${icSvg(n)}</span>`).join(""),show:ms=>{ms.forEach((m,i)=>{const o=ROOMS.flatMap(r=>r.objs).find(q=>q.m===m);const r=instObj(o);r.piv.position.set(-1.25+i*.5,r.hh/2,1.3)})},wreck:()=>WRECK.length,splat:(x,z,c,r)=>{splat(x,z,c,r);const m=DEBI.disc.m;return Array.from(m.instanceColor.array.slice(0,9)).join(",")+" n="+m.count},
   spawn:(i,x=-.2,z=ZP)=>{for(const d of DBG)scene.remove(d);DBG.length=0;const d=room().objs[i];const o={...d};Object.assign(o,instObj(o));o.piv.position.set(x,TT+o.hh/2,z);DBG.push(o.piv);return o.hh},
   jobs:()=>JOBT,stats:()=>({cat:CATS&&CATS.geo.attributes.position.count,human:HUMS&&HUMS.geo.attributes.position.count}),G:()=>G,O:()=>O,save};
 function boot(){
