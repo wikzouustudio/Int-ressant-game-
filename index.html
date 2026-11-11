@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Rumble Pop</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Rumble Pop : arène 3c3 cartoon en 3D jouable dans le navigateur.">
+<meta name="theme-color" content="#1d1450">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Luckiest+Guy&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <canvas id="overlay"></canvas>
+
+  <!-- ============ LOBBY ============ -->
+  <section id="lobby" class="screen">
+    <header class="topbar">
+      <button id="profileCard" class="profile" type="button" aria-label="Changer de pseudo">
+        <span class="avatar" id="avatar"><img id="avatarImg" alt=""></span>
+        <span class="lvl" id="lvl">1</span>
+        <span class="pinfo">
+          <span id="playerName" class="pname">Joueur</span>
+          <span class="trophies"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffc53a" stroke="#1b1236" stroke-width="1.8" stroke-linejoin="round" d="M6 3h12v3h3c0 4-2 6-4.5 6.4A6 6 0 0 1 13 15.8V18h3.5v3h-9v-3H11v-2.2a6 6 0 0 1-3.5-3.4C5 12 3 10 3 6h3z"/></svg><b id="trophyTotal">0</b></span>
+          <span class="xpbar"><i id="xpFill"></i></span>
+        </span>
+      </button>
+      <div class="spacer"></div>
+      <div class="cur" title="Pièces"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#ffc53a" stroke="#1b1236" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="#e08a00" stroke-width="2"/></svg><b id="coins">0</b></div>
+      <button id="btnMusic" class="icon-btn" type="button" aria-label="Musique" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18V5l11-2v13" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6.5" cy="18" r="3" fill="currentColor"/><circle cx="17.5" cy="16" r="3" fill="currentColor"/></svg></button>
+      <button id="btnSfx" class="icon-btn" type="button" aria-label="Effets sonores" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+    </header>
+
+    <nav class="side" aria-label="Menu">
+      <button id="btnHeroes" class="side-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="5" fill="#ffd23f" stroke="#1b1236" stroke-width="2"/><path d="M3.5 21c.8-4.5 4.2-7 8.5-7s7.7 2.5 8.5 7z" fill="#ff7a1a" stroke="#1b1236" stroke-width="2" stroke-linejoin="round"/></svg><span>Héros</span></button>
+      <button id="btnConcept" class="side-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4" fill="#19e3c8" stroke="#1b1236" stroke-width="2"/><path d="M6 17l4-5 3 3 2-2 3 4z" fill="#fff" stroke="#1b1236" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9" cy="8.5" r="2" fill="#ffd23f" stroke="#1b1236" stroke-width="1.5"/></svg><span>Fiche</span></button>
+      <button id="btnHelp" class="side-btn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5" fill="#ff4f9a" stroke="#1b1236" stroke-width="2"/><path d="M9.3 9.4a2.8 2.8 0 1 1 3.8 2.6c-.8.4-1.1.9-1.1 1.8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.5" fill="#fff"/></svg><span>Aide</span></button>
+    </nav>
+
+    <div class="nameplate">
+      <span id="lpRole" class="np-role">Lanceur</span>
+      <h2 id="lpName">MISO</h2>
+      <span id="lpTitle" class="np-title">Le Chef Explosif</span>
+      <span class="np-tro"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffc53a" stroke="#1b1236" stroke-width="1.8" stroke-linejoin="round" d="M6 3h12v3h3c0 4-2 6-4.5 6.4A6 6 0 0 1 13 15.8V18h3.5v3h-9v-3H11v-2.2a6 6 0 0 1-3.5-3.4C5 12 3 10 3 6h3z"/></svg><b id="lpTro">0</b></span>
+    </div>
+
+    <button id="promo" class="promo" type="button">
+      <span class="promo-tag">Nouveau héros</span>
+      <img id="promoImg" alt="">
+      <span class="promo-txt"><b>MISO</b><small>Voir la fiche concept</small></span>
+    </button>
+
+    <div class="playzone">
+      <button id="modeCard" class="mode-card" type="button" data-mode="ko">
+        <span class="mode-ic" aria-hidden="true"></span>
+        <span class="mode-txt"><b id="modeName">K.O. EXPRESS</b><small id="modeDesc">Premiers à 10 K.O. · 3c3</small><small class="map-name">Carte : Marché de Minuit</small></span>
+        <span class="mode-swap" aria-hidden="true">⇄</span>
+      </button>
+      <button id="btnPlay" class="play-btn" type="button">JOUER</button>
+    </div>
+  </section>
+
+  <!-- ============ HÉROS ============ -->
+  <section id="heroes" class="screen" hidden>
+    <header class="screen-head">
+      <button id="heroesBack" class="back-btn" type="button" aria-label="Retour">‹</button>
+      <h2>Héros</h2>
+    </header>
+    <div class="heroes-body">
+      <div id="heroGrid" class="hero-grid"></div>
+      <div class="hero-stage" aria-hidden="true"></div>
+      <aside class="hero-detail">
+        <div class="hd-chips"><span id="hdRarity" class="chip rar"></span><span id="hdRole" class="chip role"></span></div>
+        <h3 id="hdName"></h3>
+        <p id="hdTitle" class="hd-title"></p>
+        <div id="hdStats" class="stats"></div>
+        <div class="ability"><span class="ab-k">Attaque</span><b id="hdAtk"></b><p id="hdAtkD"></p></div>
+        <div class="ability sup"><span class="ab-k">Super</span><b id="hdSup"></b><p id="hdSupD"></p></div>
+        <div class="hd-actions"><button id="hdSheet" class="btn ghost" type="button">Fiche</button><button id="hdChoose" class="btn primary" type="button">CHOISIR</button></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ FICHE CONCEPT ============ -->
+  <section id="showcase" class="screen" hidden>
+    <div class="sc-panel">
+      <span id="scEyebrow" class="sc-eyebrow">NOUVEAU HÉROS</span>
+      <h1 id="scName">MISO</h1>
+      <p id="scTitle" class="sc-title"></p>
+      <div class="sc-chips"><span id="scRarity" class="chip rar"></span><span id="scRole" class="chip role"></span></div>
+      <p id="scBio" class="sc-bio"></p>
+      <div class="sc-abil">
+        <div><span class="ab-k">Attaque</span><b id="scAtk"></b><p id="scAtkD"></p></div>
+        <div><span class="ab-k">Super</span><b id="scSup"></b><p id="scSupD"></p></div>
+        <div><span class="ab-k">Trait</span><b id="scTrait"></b><p id="scTraitD"></p></div>
+      </div>
+      <div id="scPalette" class="sc-palette"></div>
+    </div>
+    <div class="sc-tools">
+      <button id="scPrev" class="tool" type="button" aria-label="Héros précédent">‹</button>
+      <button id="scNext" class="tool" type="button" aria-label="Héros suivant">›</button>
+      <button id="scRotate" class="tool txt" type="button" aria-pressed="false">Tourner</button>
+      <button id="scCapture" class="tool txt" type="button">Planche PNG</button>
+      <button id="scClose" class="tool" type="button" aria-label="Fermer">✕</button>
+    </div>
+    <p class="sc-hint">Glisse pour tourner le héros</p>
+  </section>
+
+  <!-- ============ HUD ============ -->
+  <section id="hud" class="screen" hidden>
+    <div class="hud-top">
+      <div id="scores" class="scores">
+        <div class="team blue"><span>Bleus</span><b id="scoreBlue">0</b></div>
+        <div class="timerbox"><small id="hudMode">K.O. EXPRESS</small><b id="timer">2:00</b><small id="hudGoal"></small></div>
+        <div class="team red"><b id="scoreRed">0</b><span>Rouges</span></div>
+      </div>
+      <div id="zoneBars" class="zonebars" hidden>
+        <div class="zb blue"><i id="zoneBlue"></i><b id="zoneBlueN">0%</b></div>
+        <span id="zoneStatus" class="zstatus">ZONE LIBRE</span>
+        <div class="zb red"><i id="zoneRed"></i><b id="zoneRedN">0%</b></div>
+      </div>
+    </div>
+    <div id="killfeed" class="killfeed"></div>
+    <div id="banner" class="banner"></div>
+    <div id="respawn" class="respawn" hidden>K.O. ! Retour dans <b id="respawnN">3</b></div>
+    <button id="btnPause" class="pause-btn" type="button" aria-label="Pause"><span></span><span></span></button>
+
+    <div id="superChip" class="super-chip"><span class="ring"><i></i></span><span class="sc-txt"><b id="superLabelD">Super</b><small>Clic droit · Espace</small></span></div>
+    <p class="desk-hint">ZQSD / WASD : bouger · Clic gauche : attaquer · Clic droit ou Espace : super · Échap : pause</p>
+
+    <div id="touchUI" class="touch-ui">
+      <div id="moveZone" class="move-zone"><div id="joyBase" class="joy-base"><div id="joyKnob" class="joy-knob"></div></div></div>
+      <button id="btnSuper" class="aim-btn super" type="button"><span id="supKnob" class="aim-knob"></span><span id="superLabel" class="lbl">SUPER</span></button>
+      <button id="btnAttack" class="aim-btn atk" type="button"><span id="atkKnob" class="aim-knob"></span><span id="atkLabel" class="lbl">ATTAQUE</span></button>
+    </div>
+    <p class="rotate-hint">Tourne ton téléphone pour une vue plus large</p>
+  </section>
+
+  <!-- ============ RÉSULTATS ============ -->
+  <section id="results" class="screen" hidden>
+    <div class="res-card">
+      <h1 id="resTitle">VICTOIRE !</h1>
+      <p id="resScore" class="res-score"></p>
+      <div class="res-teams">
+        <div class="res-team"><span class="rt-k blue">Ton équipe</span><div id="resBlue" class="rt-list"></div></div>
+        <div class="res-team"><span class="rt-k red">Adversaires</span><div id="resRed" class="rt-list"></div></div>
+      </div>
+      <div class="res-rewards">
+        <div><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path fill="#ffc53a" stroke="#1b1236" stroke-width="1.8" stroke-linejoin="round" d="M6 3h12v3h3c0 4-2 6-4.5 6.4A6 6 0 0 1 13 15.8V18h3.5v3h-9v-3H11v-2.2a6 6 0 0 1-3.5-3.4C5 12 3 10 3 6h3z"/></svg><b id="resTro">+8</b></div>
+        <div><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="#ffc53a" stroke="#1b1236" stroke-width="2"/><circle cx="12" cy="12" r="5" fill="none" stroke="#e08a00" stroke-width="2"/></svg><b id="resCoins">+20</b></div>
+        <div><span class="xp-k">XP</span><b id="resXp">+40</b></div>
+      </div>
+      <div class="res-actions"><button id="resLobby" class="btn ghost" type="button">Lobby</button><button id="resAgain" class="btn primary" type="button">REJOUER</button></div>
+    </div>
+  </section>
+
+  <!-- ============ MODALES ============ -->
+  <section id="pause" class="modal" hidden>
+    <div class="modal-card">
+      <h2>Pause</h2>
+      <button id="pResume" class="btn primary" type="button">REPRENDRE</button>
+      <button id="pQuit" class="btn ghost" type="button">Quitter la partie</button>
+    </div>
+  </section>
+
+  <section id="help" class="modal" hidden>
+    <div class="modal-card wide">
+      <h2>Comment jouer</h2>
+      <div class="help-grid">
+        <div><h4>Sur ordinateur</h4><ul><li><kbd>ZQSD</kbd> ou <kbd>WASD</kbd> pour bouger</li><li><kbd>Clic gauche</kbd> pour attaquer vers la souris</li><li><kbd>Clic droit</kbd> (maintenir pour viser) ou <kbd>Espace</kbd> pour le super</li><li><kbd>Échap</kbd> pour la pause</li></ul></div>
+        <div><h4>Sur mobile</h4><ul><li>Joystick à gauche pour bouger</li><li>Bouton orange : touche pour viser automatiquement, glisse pour viser à la main</li><li>Bouton jaune : le super, dès qu'il est chargé</li></ul></div>
+        <div><h4>Règles</h4><ul><li>3 munitions qui se rechargent toutes seules</li><li>Toucher un ennemi charge ton super</li><li>Sans combat pendant 3 s, tu régénères tes PV</li><li>Les buissons te cachent, sauf si un ennemi est tout proche</li></ul></div>
+        <div><h4>Modes</h4><ul><li><b>K.O. Express</b> : la première équipe à 10 K.O. gagne</li><li><b>Zone Chaude</b> : restez seuls dans le cercle central pour remplir votre jauge</li></ul></div>
+      </div>
+      <button id="helpClose" class="btn primary" type="button">C'EST PARTI</button>
+    </div>
+  </section>
+
+  <section id="rename" class="modal" hidden>
+    <form id="renameForm" class="modal-card">
+      <h2>Ton pseudo</h2>
+      <label class="sr" for="renameInput">Pseudo</label>
+      <input id="renameInput" maxlength="14" autocomplete="off" spellcheck="false">
+      <div class="row"><button id="renameCancel" class="btn ghost" type="button">Annuler</button><button class="btn primary" type="submit">VALIDER</button></div>
+    </form>
+  </section>
+
+  <section id="sheet" class="modal" hidden>
+    <div class="modal-card wide">
+      <h2>Planche concept art</h2>
+      <img id="sheetImg" class="sheet-img" alt="Planche concept art du héros">
+      <p class="sheet-note">Clic droit ou appui long sur l'image pour l'enregistrer.</p>
+      <button id="sheetClose" class="btn primary" type="button">FERMER</button>
+    </div>
+  </section>
+
+  <div id="loading" class="loading">
+    <div class="logo"><span>RUMBLE</span><span>POP!</span></div>
+    <p class="load-msg">Chargement de l'arène…</p>
+  </div>
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
